@@ -395,13 +395,42 @@ async function startServer() {
       }
       ics += "X-WR-TIMEZONE:Europe/Brussels\r\n";
 
-      // Date & Time Parsing/Formatting Helpers (Convert to UTC)
-      const parseDateTime = (dateStr: string, timeStr: string): Date => {
+      // Date & Time Parsing/Formatting Helpers
+      // Shift dates/times are stored as naive "YYYY-MM-DD" / "HH:MM" strings that
+      // represent wall-clock time in Europe/Brussels. We must convert them to a
+      // correct UTC instant WITHOUT relying on the server process's own timezone
+      // (Docker/node:alpine containers default to UTC, not Europe/Brussels, which
+      // previously caused every event to be off by 1-2 hours depending on DST).
+      const zonedTimeToUtc = (dateStr: string, timeStr: string, timeZone = "Europe/Brussels"): Date => {
         const [year, month, day] = dateStr.split("-").map(Number);
         const [hours, minutes] = timeStr.split(":").map(Number);
-        // Use local timezone of the server for reading "YYYY-MM-DD" and "HH:MM", then output to UTC
-        return new Date(year, month - 1, day, hours, minutes || 0, 0);
+        const utcGuess = new Date(Date.UTC(year, month - 1, day, hours, minutes || 0, 0));
+        const dtf = new Intl.DateTimeFormat("en-US", {
+          timeZone,
+          hourCycle: "h23",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        });
+        const parts = dtf.formatToParts(utcGuess).reduce((acc: any, p) => {
+          acc[p.type] = p.value;
+          return acc;
+        }, {});
+        const asIfLocal = Date.UTC(
+          Number(parts.year),
+          Number(parts.month) - 1,
+          Number(parts.day),
+          Number(parts.hour),
+          Number(parts.minute),
+          Number(parts.second)
+        );
+        const diff = utcGuess.getTime() - asIfLocal;
+        return new Date(utcGuess.getTime() + diff);
       };
+      const parseDateTime = (dateStr: string, timeStr: string): Date => zonedTimeToUtc(dateStr, timeStr);
 
       const formatUTC = (d: Date): string => {
         const yyyy = d.getUTCFullYear();
@@ -411,6 +440,41 @@ async function startServer() {
         const min = String(d.getUTCMinutes()).padStart(2, "0");
         const ss = String(d.getUTCSeconds()).padStart(2, "0");
         return `${yyyy}${mm}${dd}T${hh}${min}${ss}Z`;
+      };
+
+      // Escape TEXT values per RFC 5545 §3.3.11 (backslash, semicolon, comma,
+      // and any line breaks). Without this, free-text shift names/notes typed
+      // by administrators (which can contain commas, semicolons, or actual
+      // newlines from the notes textarea) corrupt the ICS file: content lines
+      // get silently truncated or broken, which is why some calendars ended up
+      // showing nothing (or garbled) at all for affected shifts.
+      const escapeICSText = (value: string): string =>
+        String(value)
+          .replace(/\\/g, "\\\\")
+          .replace(/;/g, "\\;")
+          .replace(/,/g, "\\,")
+          .replace(/\r\n|\r|\n/g, "\\n");
+
+      // Fold content lines longer than 75 octets per RFC 5545 §3.1, so strict
+      // calendar clients don't choke on long SUMMARY/DESCRIPTION values.
+      const foldLine = (line: string): string => {
+        const maxLen = 75;
+        if (Buffer.byteLength(line, "utf8") <= maxLen) return line;
+        let result = "";
+        let chunk = "";
+        let byteLen = 0;
+        for (const ch of line) {
+          const chBytes = Buffer.byteLength(ch, "utf8");
+          if (byteLen + chBytes > maxLen) {
+            result += (result ? "\r\n " : "") + chunk;
+            chunk = "";
+            byteLen = 0;
+          }
+          chunk += ch;
+          byteLen += chBytes;
+        }
+        result += (result ? "\r\n " : "") + chunk;
+        return result;
       };
 
       for (const shift of shifts) {
@@ -441,22 +505,22 @@ async function startServer() {
           descParts.push(`Medewerkers: ${assignedNames}`);
         }
 
-        const description = descParts.join("\\n");
+        const description = descParts.join("\n");
 
-        ics += "BEGIN:VEVENT\r\n";
-        ics += `UID:shift-${shift.id}@homenursing.org\r\n`;
-        ics += `DTSTAMP:${dtStamp}\r\n`;
-        ics += `DTSTART:${dtStart}\r\n`;
-        ics += `DTEND:${dtEnd}\r\n`;
-        
+        ics += foldLine("BEGIN:VEVENT") + "\r\n";
+        ics += foldLine(`UID:shift-${shift.id}@homenursing.org`) + "\r\n";
+        ics += foldLine(`DTSTAMP:${dtStamp}`) + "\r\n";
+        ics += foldLine(`DTSTART:${dtStart}`) + "\r\n";
+        ics += foldLine(`DTEND:${dtEnd}`) + "\r\n";
+
         if (user.role === "ADMINISTRATOR") {
-          ics += `SUMMARY:${shift.name} (${shift.assignments?.length || 0}/${shift.requiredEmployees})\r\n`;
+          ics += foldLine(`SUMMARY:${escapeICSText(shift.name)} (${shift.assignments?.length || 0}/${shift.requiredEmployees})`) + "\r\n";
         } else {
-          ics += `SUMMARY:${shift.name}\r\n`;
+          ics += foldLine(`SUMMARY:${escapeICSText(shift.name)}`) + "\r\n";
         }
 
         if (description) {
-          ics += `DESCRIPTION:${description}\r\n`;
+          ics += foldLine(`DESCRIPTION:${escapeICSText(description)}`) + "\r\n";
         }
         ics += "END:VEVENT\r\n";
       }
@@ -464,7 +528,10 @@ async function startServer() {
       ics += "END:VCALENDAR\r\n";
 
       res.setHeader("Content-Type", "text/calendar; charset=utf-8");
-      res.setHeader("Content-Disposition", `attachment; filename="planning-${userId}.ics"`);
+      // Use "inline" (not "attachment") so calendar apps treat this as a live,
+      // pollable subscription feed instead of a one-off file download when the
+      // link is opened directly (this matters for the "Direct Abonneren" flow).
+      res.setHeader("Content-Disposition", `inline; filename="planning-${userId}.ics"`);
       return res.send(ics);
     } catch (err: any) {
       return res.status(500).send("Fout bij genereren van iCal feed: " + err.message);
@@ -2300,6 +2367,27 @@ async function startServer() {
             link: `/?announcementId=${announcement.id}`,
           },
         });
+      }
+
+      // Send an email to everyone with a known email address
+      for (const u of users) {
+        if (!u.email) continue;
+        try {
+          await sendEmailNotification(
+            u.email,
+            `Nieuwe aankondiging: ${title}`,
+            `<h3>Beste ${u.name},</h3>
+             <p>Er is een nieuwe aankondiging geplaatst door ${req.user.name}:</p>
+             <div style="margin:16px 0;padding:14px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;">
+               <p style="margin:0 0 6px 0;font-weight:bold;color:#0f172a;">${title}</p>
+               <p style="margin:0;white-space:pre-wrap;">${content}</p>
+             </div>
+             <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`,
+            { platformUrl: getPublicBaseUrl(req), ctaLabel: "Bekijk de aankondiging" }
+          );
+        } catch (mailErr) {
+          console.error(`Failed to send announcement mail to ${u.email}:`, mailErr);
+        }
       }
 
       await logAction(req.user.id, "ANNOUNCEMENT_CREATE", `Created announcement: ${title}`);
