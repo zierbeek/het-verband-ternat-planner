@@ -76,6 +76,7 @@ async function startServer() {
 
   async function sendEmailNotification(to: string, subject: string, bodyHtml: string) {
     let status = "Simulatie (Gezien in e-maillogboeken)";
+    const platformUrl = (process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "");
     
     // Read configuration from the Settings model in DB, fallback to process.env
     let resendApiKey = "";
@@ -109,6 +110,14 @@ async function startServer() {
       emailServiceType = resendApiKey ? "resend" : "simulation";
     }
 
+    const emailHtml = `
+      ${bodyHtml}
+      <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;" />
+      <p style="font-family:sans-serif;font-size:12px;line-height:1.5;color:#64748b;">
+        Direct naar het platform: <a href="${platformUrl}" style="color:#2563eb;text-decoration:underline;font-weight:600;">${platformUrl}</a>
+      </p>
+    `;
+
     if (emailServiceType === "resend" && resendApiKey) {
       try {
         const response = await fetch("https://api.resend.com/emails", {
@@ -121,7 +130,7 @@ async function startServer() {
             from: `Het Verband Ternat Planner <${senderEmail}>`,
             to,
             subject,
-            html: bodyHtml
+            html: emailHtml
           })
         });
         if (response.ok) {
@@ -149,7 +158,7 @@ async function startServer() {
           from: `Het Verband Ternat Planner <${senderEmail}>`,
           to,
           subject,
-          html: bodyHtml,
+          html: emailHtml,
         });
         status = "Verzonden via SMTP";
       } catch (e: any) {
@@ -161,7 +170,7 @@ async function startServer() {
       id: Math.random().toString(36).substring(2, 9),
       to,
       subject,
-      body: bodyHtml,
+      body: emailHtml,
       sentAt: new Date().toISOString(),
       status
     };
@@ -943,57 +952,135 @@ async function startServer() {
   });
 
   app.post("/api/shifts/send-month-schedule", authenticate, requireAdmin, async (req: any, res) => {
-    const { yearMonth } = req.body;
+    const { yearMonth, excludedUserIds = [] } = req.body;
     if (!yearMonth) {
       return res.status(400).json({ error: "Ontbrekende maand selectie." });
     }
 
     try {
-      // Find all employees and their user data
-      const employees = await prisma.employee.findMany({
+      const excludedIds = new Set(Array.isArray(excludedUserIds) ? excludedUserIds.map((id) => String(id)) : []);
+
+      const users = await prisma.user.findMany({
         include: {
-          user: true,
-          assignments: {
+          employee: {
             include: {
-              shift: true,
-            },
-            where: {
-              shift: {
-                date: {
-                  startsWith: yearMonth,
+              assignments: {
+                include: {
+                  shift: true,
+                },
+                where: {
+                  shift: {
+                    date: {
+                      startsWith: yearMonth,
+                    },
+                  },
                 },
               },
             },
           },
         },
+        orderBy: [{ role: "asc" }, { name: "asc" }],
+      });
+
+      const allMonthShifts = await prisma.shift.findMany({
+        where: {
+          date: {
+            startsWith: yearMonth,
+          },
+        },
+        include: {
+          assignments: {
+            include: {
+              employee: {
+                include: {
+                  user: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: [{ date: "asc" }, { startTime: "asc" }],
       });
 
       let emailsSentCount = 0;
 
-      for (const emp of employees) {
-        if (!emp.user.email) continue;
+      for (const user of users) {
+        if (!user.email || excludedIds.has(user.id)) continue;
 
-        // Sort shifts by date and startTime
-        const myAssignments = emp.assignments
-          .map(a => a.shift)
-          .sort((a, b) => {
-            if (a.date !== b.date) return a.date.localeCompare(b.date);
-            return a.startTime.localeCompare(b.startTime);
-          });
+        const myAssignments = user.employee?.assignments
+          ? user.employee.assignments
+              .map((a) => a.shift)
+              .sort((a, b) => {
+                if (a.date !== b.date) return a.date.localeCompare(b.date);
+                return a.startTime.localeCompare(b.startTime);
+              })
+          : [];
+
+        if (user.role === "ADMINISTRATOR" || !user.employee) {
+          const overviewRows = allMonthShifts
+            .map((shift) => {
+              const assignedNames = shift.assignments.length
+                ? shift.assignments
+                    .map((assignment) => assignment.employee.user?.name)
+                    .filter(Boolean)
+                    .join(", ")
+                : "Onbezet";
+
+              return `
+                <tr style="border-bottom:1px solid #e2e8f0;">
+                  <td style="padding:10px;border:1px solid #e2e8f0;font-weight:bold;">${shift.date}</td>
+                  <td style="padding:10px;border:1px solid #e2e8f0;">${shift.name}</td>
+                  <td style="padding:10px;border:1px solid #e2e8f0;font-family:monospace;">${shift.startTime} - ${shift.endTime}</td>
+                  <td style="padding:10px;border:1px solid #e2e8f0;">${assignedNames}</td>
+                </tr>
+              `;
+            })
+            .join("");
+
+          const emailBody = `
+            <div style="font-family:sans-serif; max-width:600px; margin:0 auto; color:#334155;">
+              <h2 style="color:#2563eb; border-bottom:2px solid #e2e8f0; padding-bottom:10px;">Maandplanning - ${yearMonth}</h2>
+              <p>Beste <strong>${user.name}</strong>,</p>
+              <p>De maandplanning voor <strong>${yearMonth}</strong> is gepubliceerd.</p>
+              <p>U bent beheerder of hebt geen persoonlijk roosterprofiel, daarom ontvangt u het overzicht van alle geplande shiften.</p>
+              <table style="width:100%; border-collapse:collapse; font-family:sans-serif; font-size:14px; margin-top:15px;">
+                <thead>
+                  <tr style="background-color:#f1f5f9; text-align:left; border-bottom:2px solid #cbd5e1;">
+                    <th style="padding:10px; border:1px solid #e2e8f0;">Datum</th>
+                    <th style="padding:10px; border:1px solid #e2e8f0;">Dienstnaam</th>
+                    <th style="padding:10px; border:1px solid #e2e8f0;">Tijd</th>
+                    <th style="padding:10px; border:1px solid #e2e8f0;">Toegewezen aan</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${overviewRows || `<tr><td colspan="4" style="padding:10px; border:1px solid #e2e8f0;">Geen shiften ingepland voor deze maand.</td></tr>`}
+                </tbody>
+              </table>
+              <p style="margin-top:25px; font-size:12px; color:#64748b; line-height:1.5; border-top:1px solid #e2e8f0; padding-top:15px;">
+                U kunt het platform direct openen via de link onderaan deze e-mail.
+              </p>
+              <p style="font-weight:bold; margin-top:20px;">Met vriendelijke groet,<br/>Het Verband Ternat Planner</p>
+            </div>
+          `;
+
+          await sendEmailNotification(user.email, `Maandplanning ${yearMonth}`, emailBody);
+          emailsSentCount++;
+          continue;
+        }
 
         if (myAssignments.length === 0) {
           // Send an email stating there are no scheduled shifts for this month
           const emailBody = `
             <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #334155;">
               <h2 style="color: #2563eb; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">Dienstregeling - ${yearMonth}</h2>
-              <p>Beste <strong>${emp.user.name}</strong>,</p>
+              <p>Beste <strong>${user.name}</strong>,</p>
               <p>De planning voor de maand <strong>${yearMonth}</strong> is zojuist gepubliceerd door de beheerder.</p>
               <p>U bent voor deze maand niet ingepland op actieve shifts.</p>
               <br/>
               <p style="font-weight: bold; margin-top: 20px;">Met vriendelijke groet,<br/>Het Verband Ternat Planner</p>
             </div>
           `;
-          await sendEmailNotification(emp.user.email, `Uw planning voor ${yearMonth}`, emailBody);
+          await sendEmailNotification(user.email, `Uw planning voor ${yearMonth}`, emailBody);
           emailsSentCount++;
           continue;
         }
@@ -1036,7 +1123,7 @@ async function startServer() {
         const emailBody = `
           <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #334155;">
             <h2 style="color: #2563eb; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">Persoonlijke Dienstregeling - ${yearMonth}</h2>
-            <p>Beste <strong>${emp.user.name}</strong>,</p>
+            <p>Beste <strong>${user.name}</strong>,</p>
             <p>De planning voor de maand <strong>${yearMonth}</strong> is zojuist definitief vastgesteld en gepubliceerd door de beheerder.</p>
             <p>Hieronder vindt u uw persoonlijke dienstrooster voor deze maand:</p>
             
@@ -1049,11 +1136,11 @@ async function startServer() {
           </div>
         `;
 
-        await sendEmailNotification(emp.user.email, `Uw persoonlijke dienstrooster voor ${yearMonth}`, emailBody);
+        await sendEmailNotification(user.email, `Uw persoonlijke dienstrooster voor ${yearMonth}`, emailBody);
         emailsSentCount++;
       }
 
-      await logAction(req.user.id, "SHIFT_SEND_MONTHLY_EMAIL", `Sent monthly schedule emails for ${yearMonth} to ${emailsSentCount} employees`);
+      await logAction(req.user.id, "SHIFT_SEND_MONTHLY_EMAIL", `Sent monthly schedule emails for ${yearMonth} to ${emailsSentCount} recipients`);
       return res.json({ success: true, count: emailsSentCount });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
@@ -1123,8 +1210,8 @@ async function startServer() {
         await prisma.notification.create({
           data: {
             userId: admin.id,
-            title: "New Leave Request",
-            message: `${req.user.name} requested leave (${type}) from ${startDate} to ${endDate}`,
+            title: "Nieuwe verlofaanvraag",
+            message: `${req.user.name} vroeg verlof aan (${type}) van ${startDate} tot ${endDate}`,
             link: "/admin/leave",
           },
         });
@@ -1182,8 +1269,8 @@ async function startServer() {
       await prisma.notification.create({
         data: {
           userId: leave.employee.userId,
-          title: "Leave Request Approved",
-          message: `Your leave request for ${leave.startDate} to ${leave.endDate} has been APPROVED by ${req.user.name}.`,
+          title: "Verlofaanvraag goedgekeurd",
+          message: `Uw verlofaanvraag van ${leave.startDate} tot ${leave.endDate} is goedgekeurd door ${req.user.name}.`,
           link: "/schedule",
         },
       });
@@ -1238,8 +1325,8 @@ async function startServer() {
       await prisma.notification.create({
         data: {
           userId: leave.employee.userId,
-          title: "Leave Request Rejected",
-          message: `Your leave request for ${leave.startDate} to ${leave.endDate} was REJECTED by ${req.user.name}.`,
+          title: "Verlofaanvraag geweigerd",
+          message: `Uw verlofaanvraag van ${leave.startDate} tot ${leave.endDate} is geweigerd door ${req.user.name}.`,
           link: "/schedule",
         },
       });
@@ -1329,8 +1416,8 @@ async function startServer() {
         await prisma.notification.create({
           data: {
             userId: admin.id,
-            title: "New Shift Change Request",
-            message: `${req.user.name} requested a shift change (${type})`,
+            title: "Nieuwe dienstwisselaanvraag",
+            message: `${req.user.name} vroeg een dienstwissel aan (${type})`,
             link: "/admin/requests",
           },
         });
@@ -1414,8 +1501,8 @@ async function startServer() {
       await prisma.notification.create({
         data: {
           userId: reqDetails.employee.userId,
-          title: `Shift Change ${status}`,
-          message: `Your shift change request has been ${status} by ${req.user.name}.`,
+          title: `Dienstwissel ${status === "APPROVED" ? "goedgekeurd" : "geweigerd"}`,
+          message: `Uw dienstwisselaanvraag is ${status === "APPROVED" ? "goedgekeurd" : "geweigerd"} door ${req.user.name}.`,
           link: "/schedule",
         },
       });
@@ -1542,8 +1629,8 @@ async function startServer() {
       await prisma.notification.create({
         data: {
           userId: swap.target.userId,
-          title: "Incoming Swap Request",
-          message: `${req.user.name} proposed swapping their shift (${swap.shift.name} on ${swap.shift.date}) with you.`,
+          title: "Binnenkomend ruilvoorstel",
+          message: `${req.user.name} stelt voor om de shift ${swap.shift.name} op ${swap.shift.date} met u te ruilen.`,
           link: "/swaps",
         },
       });
@@ -1614,8 +1701,8 @@ async function startServer() {
       await prisma.notification.create({
         data: {
           userId: swap.requester.userId,
-          title: `Colleague Responded to Swap`,
-          message: `${req.user.name} has ${response}D your swap proposal for ${swap.shift.name} on ${swap.shift.date}.`,
+              title: "Collega reageerde op ruilvoorstel",
+              message: `${req.user.name} heeft uw ruilvoorstel voor ${swap.shift.name} op ${swap.shift.date} ${response === "ACCEPT" ? "geaccepteerd" : "geweigerd"}.`,
           link: "/swaps",
         },
       });
@@ -1645,8 +1732,8 @@ async function startServer() {
           await prisma.notification.create({
             data: {
               userId: admin.id,
-              title: "Swap Ready for Approval",
-              message: `Swap request between ${swap.requester.user.name} and ${req.user.name} was accepted. Needs admin approval.`,
+                title: "Ruilvoorstel klaar voor goedkeuring",
+                message: `Het ruilvoorstel tussen ${swap.requester.user.name} en ${req.user.name} is geaccepteerd en wacht op beheerdergoedkeuring.`,
               link: "/admin/swaps",
             },
           });
@@ -1734,8 +1821,8 @@ async function startServer() {
       await prisma.notification.create({
         data: {
           userId: swap.requester.userId,
-          title: `Swap Request ${status === "APPROVED_ADMIN" ? "Approved" : "Rejected"}`,
-          message: `Your shift swap has been ${status === "APPROVED_ADMIN" ? "APPROVED" : "REJECTED"} by Admin ${req.user.name}.`,
+          title: `Ruilvoorstel ${status === "APPROVED_ADMIN" ? "goedgekeurd" : "geweigerd"}`,
+          message: `Uw ruilvoorstel is ${status === "APPROVED_ADMIN" ? "goedgekeurd" : "geweigerd"} door beheerder ${req.user.name}.`,
           link: "/schedule",
         },
       });
@@ -1743,8 +1830,8 @@ async function startServer() {
       await prisma.notification.create({
         data: {
           userId: swap.target.userId,
-          title: `Swap Request ${status === "APPROVED_ADMIN" ? "Approved" : "Rejected"}`,
-          message: `Your shift swap has been ${status === "APPROVED_ADMIN" ? "APPROVED" : "REJECTED"} by Admin ${req.user.name}.`,
+          title: `Ruilvoorstel ${status === "APPROVED_ADMIN" ? "goedgekeurd" : "geweigerd"}`,
+          message: `Het ruilvoorstel met ${swap.requester.user.name} is ${status === "APPROVED_ADMIN" ? "goedgekeurd" : "geweigerd"} door beheerder ${req.user.name}.`,
           link: "/schedule",
         },
       });
@@ -1808,8 +1895,8 @@ async function startServer() {
           await prisma.notification.create({
             data: {
               userId: swap.requester.userId,
-              title: "Colleague Responded to Swap",
-              message: `${swap.target.user.name} has ACCEPTED your swap proposal for ${swap.shift.name} on ${swap.shift.date} from the email link.`,
+              title: "Collega reageerde op ruilvoorstel",
+              message: `${swap.target.user.name} heeft uw ruilvoorstel voor ${swap.shift.name} op ${swap.shift.date} via de e-mail geaccepteerd.`,
               link: "/swaps",
             },
           });
@@ -1835,8 +1922,8 @@ async function startServer() {
             await prisma.notification.create({
               data: {
                 userId: admin.id,
-                title: "Swap Ready for Approval",
-                message: `Swap request between ${swap.requester.user.name} and ${swap.target.user.name} was accepted from the email link. Needs admin approval.`,
+                title: "Ruilvoorstel klaar voor goedkeuring",
+                message: `Het ruilvoorstel tussen ${swap.requester.user.name} en ${swap.target.user.name} is via de e-mail geaccepteerd en wacht op beheerdergoedkeuring.`,
                 link: "/admin/swaps",
               },
             });
@@ -1853,8 +1940,8 @@ async function startServer() {
           await prisma.notification.create({
             data: {
               userId: swap.requester.userId,
-              title: "Colleague Responded to Swap",
-              message: `${swap.target.user.name} has DECLINED your swap proposal for ${swap.shift.name} on ${swap.shift.date} from the email link.`,
+              title: "Collega reageerde op ruilvoorstel",
+              message: `${swap.target.user.name} heeft uw ruilvoorstel voor ${swap.shift.name} op ${swap.shift.date} via de e-mail geweigerd.`,
               link: "/swaps",
             },
           });
@@ -1934,7 +2021,7 @@ async function startServer() {
       await prisma.notification.create({
         data: {
           userId: swap.requester.userId,
-          title: `Swap Request ${payload.response === "APPROVED_ADMIN" ? "Approved" : "Rejected"}`,
+          title: `Ruilvoorstel ${payload.response === "APPROVED_ADMIN" ? "goedgekeurd" : "geweigerd"}`,
           message: `Uw ruilvoorstel is door beheerder ${admin.name} ${responseLabel}.`,
           link: "/swaps",
         },
@@ -1943,7 +2030,7 @@ async function startServer() {
       await prisma.notification.create({
         data: {
           userId: swap.target.userId,
-          title: `Swap Request ${payload.response === "APPROVED_ADMIN" ? "Approved" : "Rejected"}`,
+          title: `Ruilvoorstel ${payload.response === "APPROVED_ADMIN" ? "goedgekeurd" : "geweigerd"}`,
           message: `De ruil met ${swap.requester.user.name} is door beheerder ${admin.name} ${responseLabel}.`,
           link: "/swaps",
         },
@@ -2065,9 +2152,9 @@ async function startServer() {
         await prisma.notification.create({
           data: {
             userId: u.id,
-            title: "New Announcement",
-            message: `Admin posted: ${title}`,
-            link: "/dashboard",
+            title: "Nieuwe aankondiging",
+            message: `Beheerder plaatste: ${title}`,
+            link: `/?announcementId=${announcement.id}`,
           },
         });
       }
@@ -2424,6 +2511,23 @@ async function startServer() {
       }
       await logAction(req.user.id, "ADMIN_UPDATE_SETTINGS", "Beheerder heeft e-mail- of systeeminstellingen bijgewerkt");
       return res.json({ success: true });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/admin/users", authenticate, requireAdmin, async (req, res) => {
+    try {
+      const users = await prisma.user.findMany({
+        orderBy: [{ role: "asc" }, { name: "asc" }],
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+        },
+      });
+      return res.json(users);
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
     }

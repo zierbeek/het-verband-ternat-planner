@@ -114,7 +114,7 @@ export default function App() {
     { id: "leave", label: "Verlofaanvragen", icon: ClipboardList },
     { id: "swaps", label: "Ruilbord", icon: ArrowLeftRight },
     ...(user.role === "ADMINISTRATOR"
-      ? [{ id: "admin", label: `Beheercentrum (${adminOpenRequests})`, icon: Settings }]
+      ? [{ id: "admin", label: "Beheercentrum", icon: Settings, badge: adminOpenRequests }]
       : []),
   ];
 
@@ -183,7 +183,12 @@ export default function App() {
                 }`}
               >
                 <Icon className="h-4 w-4" />
-                {item.label}
+                <span className="flex-1 text-left">{item.label}</span>
+                {item.badge ? (
+                  <span className="min-w-6 h-6 px-1.5 inline-flex items-center justify-center rounded-full bg-blue-500 text-white text-[10px] font-extrabold shadow-sm">
+                    {item.badge}
+                  </span>
+                ) : null}
               </button>
             );
           })}
@@ -221,7 +226,12 @@ export default function App() {
                     }`}
                   >
                     <Icon className="h-4 w-4" />
-                    {item.label}
+                    <span className="flex-1 text-left">{item.label}</span>
+                    {item.badge ? (
+                      <span className="min-w-6 h-6 px-1.5 inline-flex items-center justify-center rounded-full bg-blue-500 text-white text-[10px] font-extrabold shadow-sm">
+                        {item.badge}
+                      </span>
+                    ) : null}
                   </button>
                 );
               })}
@@ -257,6 +267,11 @@ export default function App() {
               <span className="text-[9px] mt-1 tracking-tight truncate max-w-[64px]">
                 {item.label}
               </span>
+              {item.badge ? (
+                <span className="absolute -top-0.5 right-2 min-w-5 h-5 px-1 inline-flex items-center justify-center rounded-full bg-blue-500 text-white text-[9px] font-extrabold shadow-sm">
+                  {item.badge}
+                </span>
+              ) : null}
               {isActive && (
                 <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-blue-600 rounded-full" />
               )}

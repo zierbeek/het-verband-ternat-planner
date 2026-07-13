@@ -13,6 +13,7 @@ export default function Dashboard({ user, token }: DashboardProps) {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [highlightedAnnouncementId, setHighlightedAnnouncementId] = useState<string | null>(null);
 
   const fetchDashboardData = async () => {
     try {
@@ -51,6 +52,26 @@ export default function Dashboard({ user, token }: DashboardProps) {
   useEffect(() => {
     fetchDashboardData();
   }, [user, token]);
+
+  useEffect(() => {
+    const targetId = new URLSearchParams(window.location.search).get("announcementId");
+    if (!targetId) return;
+
+    const timer = window.setTimeout(() => {
+      const element = document.getElementById(`announcement-${targetId}`);
+      if (element) {
+        element.scrollIntoView({ behavior: "smooth", block: "center" });
+        setHighlightedAnnouncementId(targetId);
+      }
+    }, 150);
+
+    const clearTimer = window.setTimeout(() => setHighlightedAnnouncementId(null), 5000);
+
+    return () => {
+      window.clearTimeout(timer);
+      window.clearTimeout(clearTimer);
+    };
+  }, [announcements]);
 
   const handleMarkAsRead = async (notifId: string) => {
     try {
@@ -124,6 +145,12 @@ export default function Dashboard({ user, token }: DashboardProps) {
       }
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handleOpenNotification = (notif: Notification) => {
+    if (notif.link) {
+      window.location.href = notif.link;
     }
   };
 
@@ -297,7 +324,13 @@ export default function Dashboard({ user, token }: DashboardProps) {
             ) : (
               <div className="space-y-4">
                 {announcements.map((ann) => (
-                  <div key={ann.id} className="p-4 rounded-xl bg-amber-50/30 border border-amber-100 space-y-3">
+                  <div
+                    key={ann.id}
+                    id={`announcement-${ann.id}`}
+                    className={`p-4 rounded-xl bg-amber-50/30 border space-y-3 transition ${
+                      highlightedAnnouncementId === ann.id ? "border-amber-400 ring-2 ring-amber-200" : "border-amber-100"
+                    }`}
+                  >
                     <div className="flex justify-between items-start gap-3">
                       <div>
                         <h4 className="font-bold text-amber-900 text-sm">{ann.title}</h4>
@@ -362,7 +395,10 @@ export default function Dashboard({ user, token }: DashboardProps) {
                 {notifications.map((notif) => (
                   <div
                     key={notif.id}
+                    onClick={() => handleOpenNotification(notif)}
                     className={`p-3 rounded-xl border transition flex flex-col gap-1 ${
+                      notif.link ? "cursor-pointer" : ""
+                    } ${
                       notif.isRead
                         ? "bg-slate-50/50 border-slate-100"
                         : "bg-blue-50/30 border-blue-100"
@@ -375,21 +411,30 @@ export default function Dashboard({ user, token }: DashboardProps) {
                       <div className="flex items-center gap-1.5 shrink-0">
                         {!notif.isRead && (
                           <button
-                            onClick={() => handleMarkAsRead(notif.id)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleMarkAsRead(notif.id);
+                            }}
                             className="text-[10px] text-blue-600 hover:text-blue-800 font-bold transition hover:underline cursor-pointer"
                           >
                             Gelezen
                           </button>
                         )}
                         <button
-                          onClick={() => handleArchiveNotification(notif.id)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleArchiveNotification(notif.id);
+                          }}
                           className="p-1 rounded-md border border-slate-200 text-slate-500 hover:bg-slate-100 transition"
                           title="Archiveren"
                         >
                           <Archive className="h-3 w-3" />
                         </button>
                         <button
-                          onClick={() => handleDeleteNotification(notif.id)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleDeleteNotification(notif.id);
+                          }}
                           className="p-1 rounded-md border border-rose-200 text-rose-600 hover:bg-rose-50 transition"
                           title="Verwijderen"
                         >
@@ -398,6 +443,7 @@ export default function Dashboard({ user, token }: DashboardProps) {
                       </div>
                     </div>
                     <p className="text-xs text-slate-600 leading-relaxed">{notif.message}</p>
+                    {notif.link && <span className="text-[10px] text-blue-600 font-semibold">Open artikel of actie</span>}
                     <span className="text-[10px] text-slate-400 self-end">
                       {new Date(notif.createdAt).toLocaleDateString("nl-BE")}
                     </span>

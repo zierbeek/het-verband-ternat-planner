@@ -10,6 +10,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showDefaultLoginHint, setShowDefaultLoginHint] = useState(() => localStorage.getItem("hideDefaultLoginHint") !== "true");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,6 +29,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         throw new Error(data.error || "Inloggen mislukt.");
       }
 
+      localStorage.setItem("hideDefaultLoginHint", "true");
+      setShowDefaultLoginHint(false);
       onLoginSuccess(data.token, data.user);
     } catch (err: any) {
       setError(err.message);
@@ -51,6 +54,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         throw new Error(data.error || "Demo inloggen mislukt.");
       }
 
+      localStorage.setItem("hideDefaultLoginHint", "true");
+      setShowDefaultLoginHint(false);
       onLoginSuccess(data.token, data.user);
     } catch (err: any) {
       setError(err.message);
@@ -119,6 +124,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           </form>
 
           {/* Quick Admin Login Panel */}
+          {showDefaultLoginHint && (
           <div className="mt-8 border-t border-slate-100 pt-6">
             <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-1">
               <UserCheck className="h-4 w-4 text-blue-500" /> Eerste Keer Inloggen
@@ -140,6 +146,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               </button>
             </div>
           </div>
+          )}
         </div>
       </div>
     </div>

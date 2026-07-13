@@ -53,6 +53,9 @@ export default function AdminPanel({ user, token }: AdminPanelProps) {
   // Month Send Email states
   const [sendMonthYear, setSendMonthYear] = useState(new Date().toISOString().substring(0, 7));
   const [sendingMonthEmail, setSendingMonthEmail] = useState(false);
+  const [excludedMonthUserIds, setExcludedMonthUserIds] = useState<string[]>([]);
+  const [allUsersForMonthMail, setAllUsersForMonthMail] = useState<any[]>([]);
+  const [loadingMonthMailUsers, setLoadingMonthMailUsers] = useState(true);
 
   // Employees states
   const [employeesList, setEmployeesList] = useState<any[]>([]);
@@ -157,6 +160,23 @@ export default function AdminPanel({ user, token }: AdminPanelProps) {
     }
   };
 
+  const fetchMonthMailUsers = async () => {
+    setLoadingMonthMailUsers(true);
+    try {
+      const res = await fetch("/api/admin/users", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAllUsersForMonthMail(data);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingMonthMailUsers(false);
+    }
+  };
+
   const fetchSettings = async () => {
     setLoadingSettings(true);
     try {
@@ -192,7 +212,10 @@ export default function AdminPanel({ user, token }: AdminPanelProps) {
     if (activeTab === "logs") fetchLogs();
     if (activeTab === "emails") fetchEmails();
     if (activeTab === "employees") fetchEmployees();
-    if (activeTab === "settings") fetchSettings();
+    if (activeTab === "settings") {
+      fetchSettings();
+      fetchMonthMailUsers();
+    }
   }, [activeTab, token]);
 
   const handlePostAnnouncement = async (e: React.FormEvent) => {
@@ -320,12 +343,12 @@ export default function AdminPanel({ user, token }: AdminPanelProps) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ yearMonth: sendMonthYear }),
+        body: JSON.stringify({ yearMonth: sendMonthYear, excludedUserIds: excludedMonthUserIds }),
       });
 
       if (res.ok) {
         const data = await res.json();
-        alert(`Succes: De persoonlijke roosters van ${sendMonthYear} zijn per e-mail verzonden naar ${data.count} medewerkers!`);
+        alert(`Succes: De planning van ${sendMonthYear} is per e-mail verzonden naar ${data.count} ontvangers!`);
       } else {
         const errData = await res.json();
         alert(`Fout bij verzenden roosters: ${errData.error || "Onbekende fout"}`);
@@ -1013,24 +1036,66 @@ export default function AdminPanel({ user, token }: AdminPanelProps) {
                 <Mail className="h-4 w-4 text-blue-600" /> Maandplanning Versturen via E-mail
               </h4>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Stuur de vastgestelde roosters van alle medewerkers voor een gekozen maand rechtstreeks naar hun e-mailadres. Elke medewerker ontvangt zijn persoonlijke overzicht.
+                Stuur de vastgestelde roosters van alle gebruikers en beheerders voor een gekozen maand rechtstreeks naar hun e-mailadres. Je kan hieronder specifieke accounts uitsluiten.
               </p>
-              <form onSubmit={handleSendMonthSchedule} className="flex gap-2">
-                <input
-                  type="month"
-                  required
-                  placeholder="YYYY-MM"
-                  value={sendMonthYear}
-                  onChange={(e) => setSendMonthYear(e.target.value)}
-                  className="flex-1 px-3 py-1.5 text-xs border border-slate-300 rounded-lg shadow-xs focus:outline-hidden"
-                />
-                <button
-                  type="submit"
-                  disabled={sendingMonthEmail || !sendMonthYear}
-                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg uppercase tracking-wider transition disabled:opacity-50 cursor-pointer"
-                >
-                  {sendingMonthEmail ? "Versturen..." : "Verstuur Planning"}
-                </button>
+              <form onSubmit={handleSendMonthSchedule} className="space-y-3">
+                <div className="flex gap-2">
+                  <input
+                    type="month"
+                    required
+                    placeholder="YYYY-MM"
+                    value={sendMonthYear}
+                    onChange={(e) => setSendMonthYear(e.target.value)}
+                    className="flex-1 px-3 py-1.5 text-xs border border-slate-300 rounded-lg shadow-xs focus:outline-hidden"
+                  />
+                  <button
+                    type="submit"
+                    disabled={sendingMonthEmail || !sendMonthYear}
+                    className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg uppercase tracking-wider transition disabled:opacity-50 cursor-pointer"
+                  >
+                    {sendingMonthEmail ? "Versturen..." : "Verstuur Planning"}
+                  </button>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Gebruikers uitsluiten</p>
+                    <button
+                      type="button"
+                      onClick={() => setExcludedMonthUserIds([])}
+                      className="text-[10px] font-semibold text-blue-600 hover:text-blue-800"
+                    >
+                      Alles wissen
+                    </button>
+                  </div>
+
+                  {loadingMonthMailUsers ? (
+                    <p className="text-xs text-slate-400">Gebruikers laden...</p>
+                  ) : (
+                    <div className="max-h-40 overflow-y-auto space-y-1 pr-1">
+                      {allUsersForMonthMail.map((mailUser) => (
+                        <label key={mailUser.id} className="flex items-center justify-between gap-3 text-xs bg-white border border-slate-200 rounded-lg px-3 py-2">
+                          <span className="min-w-0">
+                            <span className="font-semibold text-slate-800 block truncate">{mailUser.name}</span>
+                            <span className="text-[10px] text-slate-400 block truncate">{mailUser.email} • {mailUser.role === "ADMINISTRATOR" ? "Beheerder" : "Gebruiker"}</span>
+                          </span>
+                          <input
+                            type="checkbox"
+                            checked={excludedMonthUserIds.includes(mailUser.id)}
+                            onChange={(e) => {
+                              setExcludedMonthUserIds((current) =>
+                                e.target.checked
+                                  ? [...current, mailUser.id]
+                                  : current.filter((id) => id !== mailUser.id)
+                              );
+                            }}
+                            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </form>
             </div>
 

@@ -94,9 +94,16 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
   const [feedbackMessage, setFeedbackMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [draggedItem, setDraggedItem] = useState<PlannerDragItem | null>(null);
   const [draggedSlot, setDraggedSlot] = useState<string | null>(null);
+  const [editEmployeeId, setEditEmployeeId] = useState<string>("");
 
   const showFeedback = (text: string, type: "success" | "error" = "success") => {
     setFeedbackMessage({ text, type });
+  };
+
+  const openShiftEditor = (shift: Shift) => {
+    setSelectedShift(shift);
+    setEditEmployeeId(shift.assignments?.[0]?.employeeId || "");
+    setIsEditModalOpen(true);
   };
 
   useEffect(() => {
@@ -216,6 +223,33 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
       } else {
         const err = await res.json();
         showFeedback(err.error || "Fout bij het verwijderen van de shift", "error");
+      }
+    } catch (e) {
+      console.error(e);
+      showFeedback("Fout bij het verbinden met de server", "error");
+    }
+  };
+
+  const handleSaveAssignment = async () => {
+    if (!selectedShift) return;
+
+    try {
+      const res = await fetch(`/api/shifts/${selectedShift.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ employeeId: editEmployeeId || null }),
+      });
+
+      if (res.ok) {
+        showFeedback(editEmployeeId ? "Shift succesvol toegewezen!" : "Shift weer onbezet gemaakt!");
+        setIsEditModalOpen(false);
+        fetchShifts();
+      } else {
+        const err = await res.json();
+        showFeedback(err.error || "Fout bij het bijwerken van de toewijzing", "error");
       }
     } catch (e) {
       console.error(e);
@@ -574,8 +608,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                           key={shift.id}
                           onClick={() => {
                             if (user.role === "ADMINISTRATOR") {
-                              setSelectedShift(shift);
-                              setIsEditModalOpen(true);
+                              openShiftEditor(shift);
                             }
                           }}
                           style={{ backgroundColor: shift.color + "22", borderLeftColor: shift.color }}
@@ -706,8 +739,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                                   onDragEnd={() => setDraggedItem(null)}
                                   onClick={() => {
                                     if (user.role === "ADMINISTRATOR") {
-                                      setSelectedShift(shift);
-                                      setIsEditModalOpen(true);
+                                      openShiftEditor(shift);
                                     }
                                   }}
                                   style={{ borderLeftColor: shift.color }}
@@ -724,7 +756,6 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                                         <span
                                           key={assign.id}
                                           style={getEmployeeBadgeStyle(assign.employeeId)}
-                                          className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full border truncate max-w-full"
                                           className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full border truncate max-w-full"
                                         >
                                           {assign.employee.user.name.split(" ")[0]}
@@ -824,8 +855,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                               onDragStart={() => setDraggedItem({ type: "shift", shiftId: shift.id })}
                               onDragEnd={() => setDraggedItem(null)}
                               onClick={() => {
-                                setSelectedShift(shift);
-                                setIsEditModalOpen(true);
+                                openShiftEditor(shift);
                               }}
                               style={{ borderLeftColor: shift.color }}
                               className="p-3 border-l-4 rounded-r-xl bg-white border border-slate-200 shadow-2xs cursor-pointer"
@@ -855,8 +885,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                     key={shift.id}
                     onClick={() => {
                       if (user.role === "ADMINISTRATOR") {
-                        setSelectedShift(shift);
-                        setIsEditModalOpen(true);
+                        openShiftEditor(shift);
                       }
                     }}
                     style={{ borderLeftColor: shift.color }}
@@ -1054,6 +1083,29 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                 <p className="font-bold text-slate-800">{selectedShift.name}</p>
                 <p className="text-xs text-slate-500 mt-1">Datum: {selectedShift.date}</p>
                 <p className="text-xs text-slate-500">Tijd: {selectedShift.startTime} - {selectedShift.endTime}</p>
+              </div>
+
+              <div className="p-3 bg-blue-50 rounded-xl border border-blue-100 space-y-2">
+                <label className="block text-xs font-bold uppercase tracking-wider text-blue-700">Medewerker toewijzen</label>
+                <select
+                  value={editEmployeeId}
+                  onChange={(e) => setEditEmployeeId(e.target.value)}
+                  className="w-full px-3 py-2 border border-blue-200 rounded-lg bg-white text-sm"
+                >
+                  <option value="">-- Shift onbezet laten --</option>
+                  {employees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.user?.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={handleSaveAssignment}
+                  className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs transition"
+                >
+                  Toewijzing opslaan
+                </button>
               </div>
 
               {!isDeleteConfirmOpen ? (
