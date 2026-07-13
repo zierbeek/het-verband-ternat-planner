@@ -3,6 +3,7 @@
 # ----------------------------------------------------
 FROM node:20-alpine AS builder
 WORKDIR /app
+ENV DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder"
 
 COPY package*.json ./
 RUN npm ci

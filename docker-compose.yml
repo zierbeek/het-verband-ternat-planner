@@ -21,7 +21,7 @@ services:
     container_name: shift_planner_web
     restart: always
     ports:
-      - "3000:3000"
+      - "3210:3000"
     environment:
       NODE_ENV: production
       DATABASE_URL: "postgresql://planner_admin:secret_db_password_change_me@db:5432/shift_planner?schema=public"
