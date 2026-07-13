@@ -74,9 +74,18 @@ async function startServer() {
     return `${forwardedProto}://${forwardedHost}`;
   }
 
-  async function sendEmailNotification(to: string, subject: string, bodyHtml: string) {
+  function resolvePlatformUrl(overrideUrl?: string) {
+    if (overrideUrl) return overrideUrl.replace(/\/$/, "");
+    if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, "");
+    if (process.env.PUBLIC_URL) return process.env.PUBLIC_URL.replace(/\/$/, "");
+    if (process.env.PUBLIC_IP) return `http://${process.env.PUBLIC_IP.replace(/^https?:\/\//, "")}`;
+    return "http://127.0.0.1:3000";
+  }
+
+  async function sendEmailNotification(to: string, subject: string, bodyHtml: string, options?: { platformUrl?: string; ctaLabel?: string }) {
     let status = "Simulatie (Gezien in e-maillogboeken)";
-    const platformUrl = (process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "");
+    const platformUrl = resolvePlatformUrl(options?.platformUrl);
+    const ctaLabel = options?.ctaLabel || "Open het platform";
     
     // Read configuration from the Settings model in DB, fallback to process.env
     let resendApiKey = "";
@@ -111,11 +120,28 @@ async function startServer() {
     }
 
     const emailHtml = `
-      ${bodyHtml}
-      <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;" />
-      <p style="font-family:sans-serif;font-size:12px;line-height:1.5;color:#64748b;">
-        Direct naar het platform: <a href="${platformUrl}" style="color:#2563eb;text-decoration:underline;font-weight:600;">${platformUrl}</a>
-      </p>
+      <div style="margin:0;padding:0;background:#f8fafc;">
+        <div style="max-width:640px;margin:0 auto;padding:24px 12px;font-family:Arial,Helvetica,sans-serif;color:#0f172a;">
+          <div style="border-radius:24px;overflow:hidden;box-shadow:0 10px 30px rgba(15,23,42,0.08);border:1px solid #e2e8f0;background:#ffffff;">
+            <div style="padding:24px 28px;background:linear-gradient(135deg,#2563eb 0%,#1d4ed8 100%);color:#fff;">
+              <div style="font-size:12px;letter-spacing:.16em;text-transform:uppercase;font-weight:700;opacity:.9;">Het Verband Ternat Planner</div>
+              <div style="font-size:22px;line-height:1.2;font-weight:800;margin-top:8px;">${subject}</div>
+            </div>
+            <div style="padding:28px;line-height:1.6;font-size:14px;color:#334155;">
+              ${bodyHtml}
+              <div style="margin-top:28px;padding-top:20px;border-top:1px solid #e2e8f0;">
+                <a href="${platformUrl}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;font-weight:700;padding:12px 18px;border-radius:12px;">${ctaLabel}</a>
+                <div style="margin-top:12px;font-size:12px;color:#64748b;word-break:break-all;">
+                  Alternatief: <a href="${platformUrl}" style="color:#2563eb;text-decoration:underline;">${platformUrl}</a>
+                </div>
+              </div>
+            </div>
+            <div style="padding:16px 28px 24px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:12px;color:#64748b;">
+              Dit bericht is automatisch verzonden door het planningsplatform.
+            </div>
+          </div>
+        </div>
+      </div>
     `;
 
     if (emailServiceType === "resend" && resendApiKey) {
@@ -608,7 +634,8 @@ async function startServer() {
                  <li><strong>Tijd:</strong> ${startTime} - ${endTime}</li>
                  ${notes ? `<li><strong>Opmerking:</strong> ${notes}</li>` : ""}
                </ul>
-               <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`
+                <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`,
+                { platformUrl: getPublicBaseUrl(req), ctaLabel: "Bekijk de shift" }
             );
           }
         } catch (mailErr) {
@@ -679,7 +706,8 @@ async function startServer() {
                    <li><strong>Tijd:</strong> ${updated.startTime} - ${updated.endTime}</li>
                    ${updated.notes ? `<li><strong>Opmerking:</strong> ${updated.notes}</li>` : ""}
                  </ul>
-                 <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`
+                    <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`,
+                    { platformUrl: getPublicBaseUrl(req), ctaLabel: "Open uw bijgewerkte planning" }
               );
             }
           } catch (mailErr) {
@@ -1063,7 +1091,10 @@ async function startServer() {
             </div>
           `;
 
-          await sendEmailNotification(user.email, `Maandplanning ${yearMonth}`, emailBody);
+          await sendEmailNotification(user.email, `Maandplanning ${yearMonth}`, emailBody, {
+            platformUrl: getPublicBaseUrl(req),
+            ctaLabel: "Open de maandplanning",
+          });
           emailsSentCount++;
           continue;
         }
@@ -1080,7 +1111,10 @@ async function startServer() {
               <p style="font-weight: bold; margin-top: 20px;">Met vriendelijke groet,<br/>Het Verband Ternat Planner</p>
             </div>
           `;
-          await sendEmailNotification(user.email, `Uw planning voor ${yearMonth}`, emailBody);
+          await sendEmailNotification(user.email, `Uw planning voor ${yearMonth}`, emailBody, {
+            platformUrl: getPublicBaseUrl(req),
+            ctaLabel: "Open uw planning",
+          });
           emailsSentCount++;
           continue;
         }
@@ -1136,7 +1170,10 @@ async function startServer() {
           </div>
         `;
 
-        await sendEmailNotification(user.email, `Uw persoonlijke dienstrooster voor ${yearMonth}`, emailBody);
+        await sendEmailNotification(user.email, `Uw persoonlijke dienstrooster voor ${yearMonth}`, emailBody, {
+          platformUrl: getPublicBaseUrl(req),
+          ctaLabel: "Open uw rooster",
+        });
         emailsSentCount++;
       }
 
@@ -1229,7 +1266,8 @@ async function startServer() {
                <li><strong>Reden:</strong> ${reason}</li>
              </ul>
              <p>U kunt deze aanvraag goedkeuren of weigeren in het beheercentrum.</p>
-             <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`
+               <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`,
+              { platformUrl: getPublicBaseUrl(req), ctaLabel: "Open beheercentrum" }
           );
         } catch (mailErr) {
           console.error("Failed to send leave admin mail:", mailErr);
@@ -1285,7 +1323,8 @@ async function startServer() {
             `<h3>Beste ${empUser.name},</h3>
              <p>Uw verlofaanvraag voor de periode <strong>${leave.startDate} tot ${leave.endDate}</strong> is <strong>GOEDGEKEURD</strong> door ${req.user.name}.</p>
              ${comment ? `<p><strong>Opmerking beheerder:</strong> ${comment}</p>` : ""}
-             <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`
+             <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`,
+            { platformUrl: getPublicBaseUrl(req), ctaLabel: "Bekijk uw planning" }
           );
         }
       } catch (mailErr) {
@@ -1341,7 +1380,8 @@ async function startServer() {
             `<h3>Beste ${empUser.name},</h3>
              <p>Uw verlofaanvraag voor de periode <strong>${leave.startDate} tot ${leave.endDate}</strong> is helaas <strong>GEWEIGERD</strong> door ${req.user.name}.</p>
              ${comment ? `<p><strong>Opmerking beheerder:</strong> ${comment}</p>` : ""}
-             <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`
+             <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`,
+            { platformUrl: getPublicBaseUrl(req), ctaLabel: "Bekijk uw planning" }
           );
         }
       } catch (mailErr) {
@@ -1518,7 +1558,8 @@ async function startServer() {
             `<h3>Beste ${empUser.name},</h3>
              <p>Uw aanvraag voor een dienstwijziging is <strong>${vertaaldStatus}</strong> door beheerder ${req.user.name}.</p>
              ${comment ? `<p><strong>Opmerking beheerder:</strong> ${comment}</p>` : ""}
-             <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`
+             <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`,
+            { platformUrl: getPublicBaseUrl(req), ctaLabel: "Bekijk uw planning" }
           );
         }
       } catch (mailErr) {
@@ -1649,7 +1690,8 @@ async function startServer() {
              ${buildSwapDetailsHtml({ ...swap, reason })}
              <p><strong>Actie in de app:</strong> Als u akkoord gaat, klikt u op de knop hieronder. U kunt ook weigeren via de andere knop.</p>
              ${buildSwapActionButtons(baseUrl, `/api/swaps/email-action?token=${encodeURIComponent(acceptToken)}`, `/api/swaps/email-action?token=${encodeURIComponent(declineToken)}`)}
-             <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`
+             <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`,
+            { platformUrl: baseUrl, ctaLabel: "Open ruilvoorstel" }
           );
         }
       } catch (mailErr) {
@@ -1718,7 +1760,8 @@ async function startServer() {
              <p>Uw collega <strong>${req.user.name}</strong> heeft uw voorstel om de onderstaande shift te ruilen <strong>${vertaaldResponse}</strong>:</p>
              ${buildSwapDetailsHtml(swap)}
              ${response === "ACCEPT" ? "<p>De aanvraag ligt nu bij de beheerder voor definitieve goedkeuring.</p>" : ""}
-             <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`
+             <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`,
+            { platformUrl: getPublicBaseUrl(req), ctaLabel: "Open uw ruilverzoeken" }
           );
         }
       } catch (mailErr) {
@@ -1751,7 +1794,8 @@ async function startServer() {
                ${buildSwapDetailsHtml(swap)}
                <p><strong>Actie in de app:</strong> U kunt deze ruil direct goedkeuren of weigeren via onderstaande knoppen.</p>
                ${buildSwapActionButtons(baseUrl, `/api/swaps/email-admin-action?token=${encodeURIComponent(approveToken)}`, `/api/swaps/email-admin-action?token=${encodeURIComponent(rejectToken)}`)}
-               <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`
+               <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`,
+              { platformUrl: baseUrl, ctaLabel: "Open beheercentrum" }
             );
           } catch (mailErr) {
             console.error("Failed to send swap admin notification mail:", mailErr);
@@ -1845,10 +1889,16 @@ async function startServer() {
           <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`;
 
         if (swap.requester.user.email) {
-          await sendEmailNotification(swap.requester.user.email, `Dienstruil ${vertaaldStatus.toLowerCase()} door beheerder`, emailBody);
+          await sendEmailNotification(swap.requester.user.email, `Dienstruil ${vertaaldStatus.toLowerCase()} door beheerder`, emailBody, {
+            platformUrl: getPublicBaseUrl(req),
+            ctaLabel: "Open uw planning",
+          });
         }
         if (swap.target.user.email) {
-          await sendEmailNotification(swap.target.user.email, `Dienstruil ${vertaaldStatus.toLowerCase()} door beheerder`, emailBody);
+          await sendEmailNotification(swap.target.user.email, `Dienstruil ${vertaaldStatus.toLowerCase()} door beheerder`, emailBody, {
+            platformUrl: getPublicBaseUrl(req),
+            ctaLabel: "Open uw planning",
+          });
         }
       } catch (mailErr) {
         console.error("Failed to send swap resolve emails:", mailErr);
@@ -1910,7 +1960,8 @@ async function startServer() {
                  <p>Uw collega <strong>${swap.target.user.name}</strong> heeft uw ruilvoorstel via de e-mail geaccepteerd.</p>
                  ${buildSwapDetailsHtml(swap)}
                  <p>De aanvraag ligt nu bij de beheerder voor definitieve goedkeuring.</p>
-                 <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`
+                 <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`,
+                { platformUrl: getPublicBaseUrl(req), ctaLabel: "Open uw ruilverzoeken" }
               );
             }
           } catch (mailErr) {
@@ -1954,7 +2005,8 @@ async function startServer() {
                 `<h3>Beste ${swap.requester.user.name},</h3>
                  <p>Uw collega <strong>${swap.target.user.name}</strong> heeft uw ruilvoorstel via de e-mail geweigerd.</p>
                  ${buildSwapDetailsHtml(swap)}
-                 <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`
+                 <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`,
+                { platformUrl: getPublicBaseUrl(req), ctaLabel: "Open uw ruilverzoeken" }
               );
             }
           } catch (mailErr) {
