@@ -1,0 +1,41 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: shift_planner_db
+    restart: always
+    environment:
+      POSTGRES_DB: shift_planner
+      POSTGRES_USER: planner_admin
+      POSTGRES_PASSWORD: secret_db_password_change_me
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: shift_planner_web
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: "postgresql://planner_admin:secret_db_password_change_me@db:5432/shift_planner?schema=public"
+      JWT_SECRET: "your-super-secured-long-jwt-token-key-change-me"
+    depends_on:
+      - db
+    # Run Prisma migrations on startup, seed the database if empty, and launch the server
+    entrypoint: >
+      sh -c "
+        echo 'Running database migrations...' &&
+        npx prisma db push &&
+        echo 'Starting application server...' &&
+        node dist/server.cjs
+      "
+
+volumes:
+  pgdata:

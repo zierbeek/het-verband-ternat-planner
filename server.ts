@@ -1,0 +1,2205 @@
+import express from "express";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
+import { createServer as createViteServer } from "vite";
+import { prisma } from "./server/db.js";
+import { hashPassword, comparePassword, generateToken, verifyToken } from "./server/auth.js";
+import { seedDatabase } from "./server/seed.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+async function startServer() {
+  const app = express();
+  const PORT = 3000;
+
+  // Middleware
+  app.use(express.json());
+
+  // Database auto-seeding
+  try {
+    await seedDatabase();
+  } catch (error) {
+    console.error("Failed to seed database:", error);
+  }
+
+  // Audit Log Helper
+  async function logAction(userId: string | null, action: string, details: string, oldValue?: any, newValue?: any, ip?: string) {
+    try {
+      await prisma.auditLog.create({
+        data: {
+          userId,
+          action,
+          details,
+          oldValue: oldValue ? JSON.stringify(oldValue) : null,
+          newValue: newValue ? JSON.stringify(newValue) : null,
+          ipAddress: ip || "127.0.0.1",
+        },
+      });
+    } catch (e) {
+      console.error("Error creating audit log:", e);
+    }
+  }
+
+  // Email Notifications Helper
+  const EMAILS_FILE = path.join(process.cwd(), "prisma", "emails.json");
+
+  function getSentEmails() {
+    try {
+      if (fs.existsSync(EMAILS_FILE)) {
+        return JSON.parse(fs.readFileSync(EMAILS_FILE, "utf-8"));
+      }
+    } catch (e) {
+      console.error("Failed to read emails file", e);
+    }
+    return [];
+  }
+
+  function saveSentEmail(email: any) {
+    try {
+      const list = getSentEmails();
+      list.unshift(email);
+      if (list.length > 200) list.pop();
+      fs.writeFileSync(EMAILS_FILE, JSON.stringify(list, null, 2), "utf-8");
+    } catch (e) {
+      console.error("Failed to write emails file", e);
+    }
+  }
+
+  async function sendEmailNotification(to: string, subject: string, bodyHtml: string) {
+    let status = "Simulatie (Gezien in e-maillogboeken)";
+    
+    // Read configuration from the Settings model in DB, fallback to process.env
+    let resendApiKey = "";
+    let senderEmail = "noreply@hetverbandternat.be";
+    let emailServiceType = "simulation";
+    let smtpHost = "";
+    let smtpPort = "587";
+    let smtpUser = "";
+    let smtpPass = "";
+
+    try {
+      const resendKeySetting = await prisma.setting.findUnique({ where: { key: "resend_api_key" } });
+      const senderSetting = await prisma.setting.findUnique({ where: { key: "sender_email" } });
+      const serviceTypeSetting = await prisma.setting.findUnique({ where: { key: "email_service_type" } });
+      const smtpHostSetting = await prisma.setting.findUnique({ where: { key: "smtp_host" } });
+      const smtpPortSetting = await prisma.setting.findUnique({ where: { key: "smtp_port" } });
+      const smtpUserSetting = await prisma.setting.findUnique({ where: { key: "smtp_user" } });
+      const smtpPassSetting = await prisma.setting.findUnique({ where: { key: "smtp_pass" } });
+
+      resendApiKey = resendKeySetting?.value || process.env.RESEND_API_KEY || "";
+      senderEmail = senderSetting?.value || process.env.SENDER_EMAIL || "noreply@hetverbandternat.be";
+      emailServiceType = serviceTypeSetting?.value || (resendApiKey ? "resend" : "simulation");
+      smtpHost = smtpHostSetting?.value || "";
+      smtpPort = smtpPortSetting?.value || "587";
+      smtpUser = smtpUserSetting?.value || "";
+      smtpPass = smtpPassSetting?.value || "";
+    } catch (e) {
+      console.error("Failed to read email settings from DB, using fallback", e);
+      resendApiKey = process.env.RESEND_API_KEY || "";
+      senderEmail = process.env.SENDER_EMAIL || "noreply@hetverbandternat.be";
+      emailServiceType = resendApiKey ? "resend" : "simulation";
+    }
+
+    if (emailServiceType === "resend" && resendApiKey) {
+      try {
+        const response = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${resendApiKey}`
+          },
+          body: JSON.stringify({
+            from: `Het Verband Ternat Planner <${senderEmail}>`,
+            to,
+            subject,
+            html: bodyHtml
+          })
+        });
+        if (response.ok) {
+          status = "Verzonden via Resend";
+        } else {
+          const errorText = await response.text();
+          status = `Resend Fout: ${errorText}`;
+        }
+      } catch (e: any) {
+        status = `Resend Fout: ${e.message}`;
+      }
+    } else if (emailServiceType === "smtp" && smtpHost && smtpUser && smtpPass) {
+      try {
+        const nodemailer = await import("nodemailer");
+        const transporter = nodemailer.createTransport({
+          host: smtpHost,
+          port: Number(smtpPort),
+          secure: smtpPort === "465",
+          auth: {
+            user: smtpUser,
+            pass: smtpPass,
+          },
+        });
+        await transporter.sendMail({
+          from: `Het Verband Ternat Planner <${senderEmail}>`,
+          to,
+          subject,
+          html: bodyHtml,
+        });
+        status = "Verzonden via SMTP";
+      } catch (e: any) {
+        status = `SMTP Fout: ${e.message}`;
+      }
+    }
+
+    const emailEntry = {
+      id: Math.random().toString(36).substring(2, 9),
+      to,
+      subject,
+      body: bodyHtml,
+      sentAt: new Date().toISOString(),
+      status
+    };
+
+    saveSentEmail(emailEntry);
+    console.log(`[EMAIL DISPATCH] To: ${to} | Subject: ${subject} | Status: ${status}`);
+  }
+
+  // Auth Middleware
+  const authenticate = async (req: any, res: any, next: any) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Unauthorized: Missing token" });
+    }
+    const token = authHeader.split(" ")[1];
+    const decoded = verifyToken(token);
+    if (!decoded) {
+      return res.status(401).json({ error: "Unauthorized: Invalid token" });
+    }
+    req.user = decoded;
+    next();
+  };
+
+  const requireAdmin = (req: any, res: any, next: any) => {
+    if (!req.user || req.user.role !== "ADMINISTRATOR") {
+      return res.status(403).json({ error: "Forbidden: Administrator access required" });
+    }
+    next();
+  };
+
+  // ----------------------------------------------------
+  // AUTHENTICATION ENDPOINTS
+  // ----------------------------------------------------
+
+  app.post("/api/auth/register", async (req, res) => {
+    const { email, password, name, role } = req.body;
+    if (!email || !password || !name) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    try {
+      const existingUser = await prisma.user.findUnique({ where: { email } });
+      if (existingUser) {
+        return res.status(400).json({ error: "User already exists with this email" });
+      }
+
+      const passwordHash = hashPassword(password);
+      const user = await prisma.user.create({
+        data: {
+          email,
+          passwordHash,
+          name,
+          role: role || "EMPLOYEE",
+        },
+      });
+
+      // If they are an employee, create the Employee profile
+      let employee = null;
+      if (user.role === "EMPLOYEE") {
+        employee = await prisma.employee.create({
+          data: {
+            userId: user.id,
+            preferredShifts: "[]",
+            preferredColleagues: "[]",
+          },
+        });
+      }
+
+      await logAction(user.id, "USER_REGISTER", `User registered as ${user.role}`);
+
+      const token = generateToken(user);
+      return res.status(201).json({ token, user: { id: user.id, email: user.email, role: user.role, name: user.name, employee } });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/auth/login", async (req, res) => {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: "Missing email or password" });
+    }
+
+    try {
+      const user = await prisma.user.findUnique({
+        where: { email },
+        include: { employee: true },
+      });
+      if (!user) {
+        return res.status(401).json({ error: "Invalid email or password" });
+      }
+
+      const isValid = comparePassword(password, user.passwordHash);
+      if (!isValid) {
+        return res.status(401).json({ error: "Invalid email or password" });
+      }
+
+      const token = generateToken(user);
+      await logAction(user.id, "USER_LOGIN", `User logged in successfully`);
+
+      return res.json({
+        token,
+        user: {
+          id: user.id,
+          email: user.email,
+          role: user.role,
+          name: user.name,
+          employee: user.employee,
+        },
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ----------------------------------------------------
+  // PUBLIC ICAL FEED SYNCHRONIZATION
+  // ----------------------------------------------------
+  app.get("/api/calendar/sync/:userId/feed.ics", async (req, res) => {
+    const { userId } = req.params;
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: { employee: true },
+      });
+
+      if (!user) {
+        return res.status(404).send("Gebruiker niet gevonden.");
+      }
+
+      let shifts = [];
+      if (user.employee) {
+        shifts = await prisma.shift.findMany({
+          where: {
+            assignments: {
+              some: {
+                employeeId: user.employee.id,
+              },
+            },
+          },
+          include: {
+            assignments: {
+              include: {
+                employee: {
+                  include: { user: true },
+                },
+              },
+            },
+          },
+          orderBy: { date: "asc" },
+        });
+      } else {
+        // If the user is an administrator, fetch all shifts so they can see the whole roster in their calendar!
+        shifts = await prisma.shift.findMany({
+          include: {
+            assignments: {
+              include: {
+                employee: {
+                  include: { user: true },
+                },
+              },
+            },
+          },
+          orderBy: { date: "asc" },
+        });
+      }
+
+      // Construct iCal / ICS content
+      let ics = "BEGIN:VCALENDAR\r\n";
+      ics += "VERSION:2.0\r\n";
+      ics += "PRODID:-//Thuisverpleging Het Verband Ternat//Planner//NL\r\n";
+      ics += "CALSCALE:GREGORIAN\r\n";
+      ics += "METHOD:PUBLISH\r\n";
+      if (user.role === "ADMINISTRATOR") {
+        ics += "X-WR-CALNAME:Het Verband - Volledige Planning\r\n";
+      } else {
+        ics += `X-WR-CALNAME:Het Verband - Shifts van ${user.name}\r\n`;
+      }
+      ics += "X-WR-TIMEZONE:Europe/Brussels\r\n";
+
+      // Date & Time Parsing/Formatting Helpers (Convert to UTC)
+      const parseDateTime = (dateStr: string, timeStr: string): Date => {
+        const [year, month, day] = dateStr.split("-").map(Number);
+        const [hours, minutes] = timeStr.split(":").map(Number);
+        // Use local timezone of the server for reading "YYYY-MM-DD" and "HH:MM", then output to UTC
+        return new Date(year, month - 1, day, hours, minutes || 0, 0);
+      };
+
+      const formatUTC = (d: Date): string => {
+        const yyyy = d.getUTCFullYear();
+        const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+        const dd = String(d.getUTCDate()).padStart(2, "0");
+        const hh = String(d.getUTCHours()).padStart(2, "0");
+        const min = String(d.getUTCMinutes()).padStart(2, "0");
+        const ss = String(d.getUTCSeconds()).padStart(2, "0");
+        return `${yyyy}${mm}${dd}T${hh}${min}${ss}Z`;
+      };
+
+      for (const shift of shifts) {
+        const start = parseDateTime(shift.date, shift.startTime);
+        let end = parseDateTime(shift.date, shift.endTime);
+        
+        // Handle night shifts crossing midnight (e.g. 22:00 to 06:00)
+        if (end < start) {
+          end.setDate(end.getDate() + 1);
+        }
+
+        const dtStamp = formatUTC(new Date());
+        const dtStart = formatUTC(start);
+        const dtEnd = formatUTC(end);
+
+        // Build description
+        const descParts = [];
+        if (shift.notes) {
+          descParts.push(`Opmerking: ${shift.notes}`);
+        }
+        
+        const assignedNames = shift.assignments
+          ?.map((a: any) => a.employee?.user?.name)
+          .filter(Boolean)
+          .join(", ");
+        
+        if (assignedNames) {
+          descParts.push(`Medewerkers: ${assignedNames}`);
+        }
+
+        const description = descParts.join("\\n");
+
+        ics += "BEGIN:VEVENT\r\n";
+        ics += `UID:shift-${shift.id}@homenursing.org\r\n`;
+        ics += `DTSTAMP:${dtStamp}\r\n`;
+        ics += `DTSTART:${dtStart}\r\n`;
+        ics += `DTEND:${dtEnd}\r\n`;
+        
+        if (user.role === "ADMINISTRATOR") {
+          ics += `SUMMARY:${shift.name} (${shift.assignments?.length || 0}/${shift.requiredEmployees})\r\n`;
+        } else {
+          ics += `SUMMARY:${shift.name}\r\n`;
+        }
+
+        if (description) {
+          ics += `DESCRIPTION:${description}\r\n`;
+        }
+        ics += "END:VEVENT\r\n";
+      }
+
+      ics += "END:VCALENDAR\r\n";
+
+      res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="planning-${userId}.ics"`);
+      return res.send(ics);
+    } catch (err: any) {
+      return res.status(500).send("Fout bij genereren van iCal feed: " + err.message);
+    }
+  });
+
+  app.get("/api/auth/me", authenticate, async (req: any, res) => {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: req.user.id },
+        include: { employee: true },
+      });
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      return res.json({
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        name: user.name,
+        employee: user.employee,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ----------------------------------------------------
+  // EMPLOYEES ENDPOINTS
+  // ----------------------------------------------------
+
+  app.get("/api/employees", authenticate, async (req, res) => {
+    try {
+      const employees = await prisma.employee.findMany({
+        include: { user: true },
+      });
+      return res.json(employees);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/employees/:id", authenticate, async (req: any, res) => {
+    const { id } = req.params;
+    const { preferredShifts, preferredColleagues } = req.body;
+
+    // Employees can update their own, Admins can update any
+    try {
+      const employee = await prisma.employee.findUnique({
+        where: { id },
+        include: { user: true },
+      });
+      if (!employee) {
+        return res.status(404).json({ error: "Employee not found" });
+      }
+
+      if (req.user.role !== "ADMINISTRATOR" && employee.userId !== req.user.id) {
+        return res.status(403).json({ error: "Forbidden: Cannot update other employees" });
+      }
+
+      const updated = await prisma.employee.update({
+        where: { id },
+        data: {
+          preferredShifts: preferredShifts !== undefined ? JSON.stringify(preferredShifts) : employee.preferredShifts,
+          preferredColleagues: preferredColleagues !== undefined ? JSON.stringify(preferredColleagues) : employee.preferredColleagues,
+        },
+      });
+
+      await logAction(
+        req.user.id,
+        "EMPLOYEE_UPDATE",
+        `Updated employee profile for ${employee.user.name}`,
+        employee,
+        updated
+      );
+
+      return res.json(updated);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ----------------------------------------------------
+  // SHIFTS ENDPOINTS
+  // ----------------------------------------------------
+
+  app.get("/api/shifts", authenticate, async (req, res) => {
+    const { startDate, endDate, employeeId } = req.query;
+    try {
+      const whereClause: any = {};
+      if (startDate && endDate) {
+        whereClause.date = {
+          gte: startDate as string,
+          lte: endDate as string,
+        };
+      }
+      if (employeeId) {
+        whereClause.assignments = {
+          some: {
+            employeeId: employeeId as string,
+          },
+        };
+      }
+
+      const shifts = await prisma.shift.findMany({
+        where: whereClause,
+        include: {
+          assignments: {
+            include: {
+              employee: {
+                include: { user: true },
+              },
+            },
+          },
+        },
+        orderBy: { date: "asc" },
+      });
+      return res.json(shifts);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/shifts", authenticate, requireAdmin, async (req: any, res) => {
+    const { name, startTime, endTime, date, color, requiredEmployees, notes, employeeId } = req.body;
+    if (!name || !startTime || !endTime || !date) {
+      return res.status(400).json({ error: "Missing required shift fields" });
+    }
+
+    try {
+      const shift = await prisma.shift.create({
+        data: {
+          name,
+          startTime,
+          endTime,
+          date,
+          color: color || "#3b82f6",
+          requiredEmployees: requiredEmployees !== undefined ? Number(requiredEmployees) : 1,
+          notes,
+        },
+      });
+
+      if (employeeId) {
+        await prisma.shiftAssignment.create({
+          data: {
+            shiftId: shift.id,
+            employeeId,
+            status: "ASSIGNED",
+          },
+        });
+
+        // Send email to assigned employee
+        try {
+          const assignedEmployee = await prisma.employee.findUnique({
+            where: { id: employeeId },
+            include: { user: true }
+          });
+          if (assignedEmployee && assignedEmployee.user.email) {
+            await sendEmailNotification(
+              assignedEmployee.user.email,
+              "Nieuwe shift toegewezen - Het Verband Ternat",
+              `<h3>Beste ${assignedEmployee.user.name},</h3>
+               <p>Er is een nieuwe shift aan u toegewezen op de planning:</p>
+               <ul>
+                 <li><strong>Shift:</strong> ${name}</li>
+                 <li><strong>Datum:</strong> ${date}</li>
+                 <li><strong>Tijd:</strong> ${startTime} - ${endTime}</li>
+                 ${notes ? `<li><strong>Opmerking:</strong> ${notes}</li>` : ""}
+               </ul>
+               <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`
+            );
+          }
+        } catch (mailErr) {
+          console.error("Failed to send assignment mail:", mailErr);
+        }
+      }
+
+      await logAction(req.user.id, "SHIFT_CREATE", `Created shift: ${name} on ${date}`, null, shift);
+      return res.status(201).json(shift);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/shifts/:id", authenticate, requireAdmin, async (req: any, res) => {
+    const { id } = req.params;
+    const { name, startTime, endTime, date, color, requiredEmployees, notes, employeeId } = req.body;
+
+    try {
+      const shift = await prisma.shift.findUnique({
+        where: { id },
+        include: { assignments: true },
+      });
+      if (!shift) {
+        return res.status(404).json({ error: "Shift not found" });
+      }
+
+      const updated = await prisma.shift.update({
+        where: { id },
+        data: {
+          name: name || shift.name,
+          startTime: startTime || shift.startTime,
+          endTime: endTime || shift.endTime,
+          date: date || shift.date,
+          color: color || shift.color,
+          requiredEmployees: requiredEmployees !== undefined ? Number(requiredEmployees) : shift.requiredEmployees,
+          notes: notes !== undefined ? notes : shift.notes,
+        },
+      });
+
+      if (employeeId !== undefined) {
+        // Clear old assignments and add new one
+        await prisma.shiftAssignment.deleteMany({ where: { shiftId: id } });
+        if (employeeId) {
+          await prisma.shiftAssignment.create({
+            data: {
+              shiftId: id,
+              employeeId,
+              status: "ASSIGNED",
+            },
+          });
+
+          // Send email to assigned employee
+          try {
+            const assignedEmployee = await prisma.employee.findUnique({
+              where: { id: employeeId },
+              include: { user: true }
+            });
+            if (assignedEmployee && assignedEmployee.user.email) {
+              await sendEmailNotification(
+                assignedEmployee.user.email,
+                "Gewijzigde of nieuwe shift toegewezen - Het Verband Ternat",
+                `<h3>Beste ${assignedEmployee.user.name},</h3>
+                 <p>Uw planning is bijgewerkt. U bent toegewezen aan de volgende shift:</p>
+                 <ul>
+                   <li><strong>Shift:</strong> ${updated.name}</li>
+                   <li><strong>Datum:</strong> ${updated.date}</li>
+                   <li><strong>Tijd:</strong> ${updated.startTime} - ${updated.endTime}</li>
+                   ${updated.notes ? `<li><strong>Opmerking:</strong> ${updated.notes}</li>` : ""}
+                 </ul>
+                 <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`
+              );
+            }
+          } catch (mailErr) {
+            console.error("Failed to send update assignment mail:", mailErr);
+          }
+        }
+      }
+
+      await logAction(req.user.id, "SHIFT_UPDATE", `Updated shift ${id}`, shift, updated);
+      return res.json(updated);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/shifts/:id", authenticate, requireAdmin, async (req: any, res) => {
+    const { id } = req.params;
+    try {
+      const shift = await prisma.shift.findUnique({ where: { id } });
+      if (!shift) {
+        return res.status(404).json({ error: "Shift not found" });
+      }
+
+      // Manually delete related elements first to prevent SQLite Foreign Key errors
+      await prisma.shiftChangeRequest.deleteMany({
+        where: { assignment: { shiftId: id } }
+      });
+      await prisma.shiftAssignment.deleteMany({ where: { shiftId: id } });
+      await prisma.swapRequest.deleteMany({
+        where: {
+          OR: [
+            { shiftId: id },
+            { targetShiftId: id }
+          ]
+        }
+      });
+
+      await prisma.shift.delete({ where: { id } });
+      await logAction(req.user.id, "SHIFT_DELETE", `Deleted shift: ${shift.name} on ${shift.date}`, shift, null);
+      return res.json({ success: true });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/shifts/copy-week", authenticate, requireAdmin, async (req: any, res) => {
+    const { sourceStartDate, targetStartDate, copyEmployees } = req.body;
+    if (!sourceStartDate || !targetStartDate) {
+      return res.status(400).json({ error: "Missing source or target date" });
+    }
+
+    try {
+      const sourceDate = new Date(sourceStartDate);
+      const targetDate = new Date(targetStartDate);
+
+      // Get Saturday/Sunday bounding of the source week
+      const sourceEnd = new Date(sourceDate);
+      sourceEnd.setDate(sourceDate.getDate() + 6);
+
+      const sourceEndStr = sourceEnd.toISOString().split("T")[0];
+
+      const shifts = await prisma.shift.findMany({
+        where: {
+          date: {
+            gte: sourceStartDate,
+            lte: sourceEndStr,
+          },
+        },
+        include: { assignments: true },
+      });
+
+      const dayDifference = Math.round((targetDate.getTime() - sourceDate.getTime()) / (1000 * 60 * 60 * 24));
+      let totalCreated = 0;
+
+      for (const s of shifts) {
+        const currentShiftDate = new Date(s.date);
+        currentShiftDate.setDate(currentShiftDate.getDate() + dayDifference);
+        const newDateStr = currentShiftDate.toISOString().split("T")[0];
+
+        const newShift = await prisma.shift.create({
+          data: {
+            name: s.name,
+            startTime: s.startTime,
+            endTime: s.endTime,
+            date: newDateStr,
+            color: s.color,
+            requiredEmployees: s.requiredEmployees,
+            notes: s.notes,
+          },
+        });
+
+        totalCreated++;
+
+        // Copy assignments optionally
+        if (copyEmployees !== false) {
+          for (const assign of s.assignments) {
+            await prisma.shiftAssignment.create({
+              data: {
+                shiftId: newShift.id,
+                employeeId: assign.employeeId,
+                status: "ASSIGNED",
+              },
+            });
+          }
+        }
+      }
+
+      await logAction(req.user.id, "SHIFT_COPY_WEEK", `Copied week ${sourceStartDate} to ${targetStartDate} (with employees: ${copyEmployees !== false})`);
+      return res.json({ success: true, count: totalCreated });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/shifts/repeat-week", authenticate, requireAdmin, async (req: any, res) => {
+    const { sourceStartDate, repeatWeeksCount, copyEmployees } = req.body;
+    if (!sourceStartDate || !repeatWeeksCount) {
+      return res.status(400).json({ error: "Ontbrekende bronweek of herhaal aantal." });
+    }
+    const weeks = Number(repeatWeeksCount);
+    if (weeks < 1 || weeks > 24) {
+      return res.status(400).json({ error: "Aantal weken moet tussen 1 en 24 liggen." });
+    }
+
+    try {
+      const sourceDate = new Date(sourceStartDate);
+      const sourceEnd = new Date(sourceDate);
+      sourceEnd.setDate(sourceDate.getDate() + 6);
+      const sourceEndStr = sourceEnd.toISOString().split("T")[0];
+
+      const shifts = await prisma.shift.findMany({
+        where: {
+          date: {
+            gte: sourceStartDate,
+            lte: sourceEndStr,
+          },
+        },
+        include: { assignments: true },
+      });
+
+      let totalCreated = 0;
+
+      for (let i = 1; i <= weeks; i++) {
+        const dayDifference = i * 7;
+        for (const s of shifts) {
+          const currentShiftDate = new Date(s.date);
+          currentShiftDate.setDate(currentShiftDate.getDate() + dayDifference);
+          const newDateStr = currentShiftDate.toISOString().split("T")[0];
+
+          const newShift = await prisma.shift.create({
+            data: {
+              name: s.name,
+              startTime: s.startTime,
+              endTime: s.endTime,
+              date: newDateStr,
+              color: s.color,
+              requiredEmployees: s.requiredEmployees,
+              notes: s.notes,
+            },
+          });
+
+          totalCreated++;
+
+          if (copyEmployees) {
+            for (const assign of s.assignments) {
+              await prisma.shiftAssignment.create({
+                data: {
+                  shiftId: newShift.id,
+                  employeeId: assign.employeeId,
+                  status: "ASSIGNED",
+                },
+              });
+            }
+          }
+        }
+      }
+
+      await logAction(req.user.id, "SHIFT_REPEAT_WEEK", `Repeated week ${sourceStartDate} for ${weeks} weeks into the future (Copy employees: ${copyEmployees})`);
+      return res.json({ success: true, count: totalCreated });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/shifts/copy-month", authenticate, requireAdmin, async (req: any, res) => {
+    const { sourceYearMonth, targetYearMonth, copyEmployees } = req.body;
+    if (!sourceYearMonth || !targetYearMonth) {
+      return res.status(400).json({ error: "Ontbrekende bron- of doelmaand." });
+    }
+
+    try {
+      const [srcYear, srcMonth] = sourceYearMonth.split("-").map(Number);
+      const [tgtYear, tgtMonth] = targetYearMonth.split("-").map(Number);
+
+      const srcStartStr = `${sourceYearMonth}-01`;
+      const srcEnd = new Date(srcYear, srcMonth, 0);
+      const srcEndStr = srcEnd.toISOString().split("T")[0];
+
+      const shifts = await prisma.shift.findMany({
+        where: {
+          date: {
+            gte: srcStartStr,
+            lte: srcEndStr,
+          },
+        },
+        include: { assignments: true },
+      });
+
+      let totalCreated = 0;
+
+      const getOccurrencesInMonth = (year: number, monthIdx: number) => {
+        const occurrences: { [key: string]: Date[] } = {
+          "0": [], "1": [], "2": [], "3": [], "4": [], "5": [], "6": []
+        };
+        const date = new Date(year, monthIdx, 1);
+        while (date.getMonth() === monthIdx) {
+          const day = date.getDay();
+          occurrences[day].push(new Date(date));
+          date.setDate(date.getDate() + 1);
+        }
+        return occurrences;
+      };
+
+      const srcOccurrences = getOccurrencesInMonth(srcYear, srcMonth - 1);
+      const tgtOccurrences = getOccurrencesInMonth(tgtYear, tgtMonth - 1);
+
+      for (const s of shifts) {
+        const sDate = new Date(s.date);
+        const dayOfWeek = sDate.getDay();
+        const occIndex = srcOccurrences[dayOfWeek].findIndex(d => d.toISOString().split("T")[0] === s.date);
+        if (occIndex === -1) continue;
+
+        const targetDatesList = tgtOccurrences[dayOfWeek];
+        if (!targetDatesList || targetDatesList.length === 0) continue;
+        const targetDateObj = targetDatesList[occIndex] || targetDatesList[targetDatesList.length - 1];
+        const newDateStr = targetDateObj.toISOString().split("T")[0];
+
+        const newShift = await prisma.shift.create({
+          data: {
+            name: s.name,
+            startTime: s.startTime,
+            endTime: s.endTime,
+            date: newDateStr,
+            color: s.color,
+            requiredEmployees: s.requiredEmployees,
+            notes: s.notes,
+          },
+        });
+
+        totalCreated++;
+
+        if (copyEmployees) {
+          for (const assign of s.assignments) {
+            await prisma.shiftAssignment.create({
+              data: {
+                shiftId: newShift.id,
+                employeeId: assign.employeeId,
+                status: "ASSIGNED",
+              },
+            });
+          }
+        }
+      }
+
+      await logAction(req.user.id, "SHIFT_COPY_MONTH", `Copied month ${sourceYearMonth} to ${targetYearMonth} (with employees: ${copyEmployees})`);
+      return res.json({ success: true, count: totalCreated });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/shifts/send-month-schedule", authenticate, requireAdmin, async (req: any, res) => {
+    const { yearMonth } = req.body;
+    if (!yearMonth) {
+      return res.status(400).json({ error: "Ontbrekende maand selectie." });
+    }
+
+    try {
+      // Find all employees and their user data
+      const employees = await prisma.employee.findMany({
+        include: {
+          user: true,
+          assignments: {
+            include: {
+              shift: true,
+            },
+            where: {
+              shift: {
+                date: {
+                  startsWith: yearMonth,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      let emailsSentCount = 0;
+
+      for (const emp of employees) {
+        if (!emp.user.email) continue;
+
+        // Sort shifts by date and startTime
+        const myAssignments = emp.assignments
+          .map(a => a.shift)
+          .sort((a, b) => {
+            if (a.date !== b.date) return a.date.localeCompare(b.date);
+            return a.startTime.localeCompare(b.startTime);
+          });
+
+        if (myAssignments.length === 0) {
+          // Send an email stating there are no scheduled shifts for this month
+          const emailBody = `
+            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #334155;">
+              <h2 style="color: #2563eb; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">Dienstregeling - ${yearMonth}</h2>
+              <p>Beste <strong>${emp.user.name}</strong>,</p>
+              <p>De planning voor de maand <strong>${yearMonth}</strong> is zojuist gepubliceerd door de beheerder.</p>
+              <p>U bent voor deze maand niet ingepland op actieve shifts.</p>
+              <br/>
+              <p style="font-weight: bold; margin-top: 20px;">Met vriendelijke groet,<br/>Het Verband Ternat Planner</p>
+            </div>
+          `;
+          await sendEmailNotification(emp.user.email, `Uw planning voor ${yearMonth}`, emailBody);
+          emailsSentCount++;
+          continue;
+        }
+
+        // Build list of shifts
+        let shiftsHtml = `
+          <table style="width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 14px; margin-top: 15px;">
+            <thead>
+              <tr style="background-color: #f1f5f9; text-align: left; border-bottom: 2px solid #cbd5e1;">
+                <th style="padding: 10px; border: 1px solid #e2e8f0;">Datum</th>
+                <th style="padding: 10px; border: 1px solid #e2e8f0;">Dienstnaam</th>
+                <th style="padding: 10px; border: 1px solid #e2e8f0;">Starttijd</th>
+                <th style="padding: 10px; border: 1px solid #e2e8f0;">Eindtijd</th>
+                <th style="padding: 10px; border: 1px solid #e2e8f0;">Notities</th>
+              </tr>
+            </thead>
+            <tbody>
+        `;
+
+        for (const shift of myAssignments) {
+          const dateParts = shift.date.split("-");
+          const formattedDate = dateParts.length === 3 ? `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}` : shift.date;
+
+          shiftsHtml += `
+            <tr style="border-bottom: 1px solid #e2e8f0;">
+              <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">${formattedDate}</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0;"><span style="background-color: ${shift.color}20; color: ${shift.color}; padding: 3px 8px; border-radius: 4px; font-weight: bold;">${shift.name}</span></td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0; font-family: monospace;">${shift.startTime}</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0; font-family: monospace;">${shift.endTime}</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0; color: #64748b; font-style: italic;">${shift.notes || "-"}</td>
+            </tr>
+          `;
+        }
+
+        shiftsHtml += `
+            </tbody>
+          </table>
+        `;
+
+        const emailBody = `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #334155;">
+            <h2 style="color: #2563eb; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px;">Persoonlijke Dienstregeling - ${yearMonth}</h2>
+            <p>Beste <strong>${emp.user.name}</strong>,</p>
+            <p>De planning voor de maand <strong>${yearMonth}</strong> is zojuist definitief vastgesteld en gepubliceerd door de beheerder.</p>
+            <p>Hieronder vindt u uw persoonlijke dienstrooster voor deze maand:</p>
+            
+            ${shiftsHtml}
+            
+            <p style="margin-top: 25px; font-size: 12px; color: #64748b; line-height: 1.5; border-top: 1px solid #e2e8f0; padding-top: 15px;">
+              U kunt tevens inloggen op het online beheerplatform om diensten te ruilen, verlofaanvragen in te dienen of uw wekelijkse beschikbaarheid aan te passen.
+            </p>
+            <p style="font-weight: bold; margin-top: 20px;">Met vriendelijke groet,<br/>Het Verband Ternat Planner</p>
+          </div>
+        `;
+
+        await sendEmailNotification(emp.user.email, `Uw persoonlijke dienstrooster voor ${yearMonth}`, emailBody);
+        emailsSentCount++;
+      }
+
+      await logAction(req.user.id, "SHIFT_SEND_MONTHLY_EMAIL", `Sent monthly schedule emails for ${yearMonth} to ${emailsSentCount} employees`);
+      return res.json({ success: true, count: emailsSentCount });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ----------------------------------------------------
+  // LEAVE REQUESTS ENDPOINTS
+  // ----------------------------------------------------
+
+  app.get("/api/leave-requests", authenticate, async (req: any, res) => {
+    try {
+      const { all } = req.query;
+      const whereClause: any = {};
+      
+      if (req.user.role === "EMPLOYEE" && all !== "true") {
+        const emp = await prisma.employee.findUnique({ where: { userId: req.user.id } });
+        if (emp) {
+          whereClause.employeeId = emp.id;
+        }
+      } else if (req.user.role === "EMPLOYEE" && all === "true") {
+        // Employees requesting all leave requests can only see APPROVED leaves for privacy
+        whereClause.status = "APPROVED";
+      }
+
+      const list = await prisma.leaveRequest.findMany({
+        where: whereClause,
+        include: {
+          employee: {
+            include: { user: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+      return res.json(list);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/leave-requests", authenticate, async (req: any, res) => {
+    const { type, startDate, endDate, reason } = req.body;
+    if (!type || !startDate || !endDate || !reason) {
+      return res.status(400).json({ error: "Missing leave details" });
+    }
+
+    try {
+      const emp = await prisma.employee.findUnique({ where: { userId: req.user.id } });
+      if (!emp) {
+        return res.status(400).json({ error: "Employee profile required to request leave" });
+      }
+
+      const request = await prisma.leaveRequest.create({
+        data: {
+          employeeId: emp.id,
+          type,
+          startDate,
+          endDate,
+          reason,
+          status: "PENDING",
+        },
+      });
+
+      // Notify Administrators
+      const admins = await prisma.user.findMany({ where: { role: "ADMINISTRATOR" } });
+      for (const admin of admins) {
+        await prisma.notification.create({
+          data: {
+            userId: admin.id,
+            title: "New Leave Request",
+            message: `${req.user.name} requested leave (${type}) from ${startDate} to ${endDate}`,
+            link: "/admin/leave",
+          },
+        });
+
+        // Send email notification to Admin
+        try {
+          await sendEmailNotification(
+            admin.email,
+            `Nieuwe verlofaanvraag van ${req.user.name}`,
+            `<h3>Nieuwe verlofaanvraag ontvangen</h3>
+             <p>Medewerker <strong>${req.user.name}</strong> heeft verlof aangevraagd:</p>
+             <ul>
+               <li><strong>Type:</strong> ${type}</li>
+               <li><strong>Periode:</strong> ${startDate} tot ${endDate}</li>
+               <li><strong>Reden:</strong> ${reason}</li>
+             </ul>
+             <p>U kunt deze aanvraag goedkeuren of weigeren in het beheercentrum.</p>
+             <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`
+          );
+        } catch (mailErr) {
+          console.error("Failed to send leave admin mail:", mailErr);
+        }
+      }
+
+      await logAction(req.user.id, "LEAVE_REQUEST", `Leave request created from ${startDate} to ${endDate}`);
+      return res.status(201).json(request);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/leave-requests/:id/approve", authenticate, requireAdmin, async (req: any, res) => {
+    const { id } = req.params;
+    const { comment } = req.body;
+
+    try {
+      const leave = await prisma.leaveRequest.findUnique({
+        where: { id },
+        include: { employee: true },
+      });
+      if (!leave) return res.status(404).json({ error: "Leave request not found" });
+
+      const updated = await prisma.leaveRequest.update({
+        where: { id },
+        data: {
+          status: "APPROVED",
+          comment,
+          approvalHistory: JSON.stringify([
+            { action: "APPROVED", actor: req.user.name, date: new Date().toISOString(), comment },
+          ]),
+        },
+      });
+
+      // Notify the employee
+      await prisma.notification.create({
+        data: {
+          userId: leave.employee.userId,
+          title: "Leave Request Approved",
+          message: `Your leave request for ${leave.startDate} to ${leave.endDate} has been APPROVED by ${req.user.name}.`,
+          link: "/schedule",
+        },
+      });
+
+      // Send email to Employee
+      try {
+        const empUser = await prisma.user.findUnique({ where: { id: leave.employee.userId } });
+        if (empUser && empUser.email) {
+          await sendEmailNotification(
+            empUser.email,
+            "Verlofaanvraag goedgekeurd - Het Verband Ternat",
+            `<h3>Beste ${empUser.name},</h3>
+             <p>Uw verlofaanvraag voor de periode <strong>${leave.startDate} tot ${leave.endDate}</strong> is <strong>GOEDGEKEURD</strong> door ${req.user.name}.</p>
+             ${comment ? `<p><strong>Opmerking beheerder:</strong> ${comment}</p>` : ""}
+             <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`
+          );
+        }
+      } catch (mailErr) {
+        console.error("Failed to send leave approve mail:", mailErr);
+      }
+
+      await logAction(req.user.id, "LEAVE_APPROVE", `Approved leave request ${id} for employee ${leave.employeeId}`);
+      return res.json(updated);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/leave-requests/:id/reject", authenticate, requireAdmin, async (req: any, res) => {
+    const { id } = req.params;
+    const { comment } = req.body;
+
+    try {
+      const leave = await prisma.leaveRequest.findUnique({
+        where: { id },
+        include: { employee: true },
+      });
+      if (!leave) return res.status(404).json({ error: "Leave request not found" });
+
+      const updated = await prisma.leaveRequest.update({
+        where: { id },
+        data: {
+          status: "REJECTED",
+          comment,
+          approvalHistory: JSON.stringify([
+            { action: "REJECTED", actor: req.user.name, date: new Date().toISOString(), comment },
+          ]),
+        },
+      });
+
+      // Notify Employee
+      await prisma.notification.create({
+        data: {
+          userId: leave.employee.userId,
+          title: "Leave Request Rejected",
+          message: `Your leave request for ${leave.startDate} to ${leave.endDate} was REJECTED by ${req.user.name}.`,
+          link: "/schedule",
+        },
+      });
+
+      // Send email to Employee
+      try {
+        const empUser = await prisma.user.findUnique({ where: { id: leave.employee.userId } });
+        if (empUser && empUser.email) {
+          await sendEmailNotification(
+            empUser.email,
+            "Verlofaanvraag geweigerd - Het Verband Ternat",
+            `<h3>Beste ${empUser.name},</h3>
+             <p>Uw verlofaanvraag voor de periode <strong>${leave.startDate} tot ${leave.endDate}</strong> is helaas <strong>GEWEIGERD</strong> door ${req.user.name}.</p>
+             ${comment ? `<p><strong>Opmerking beheerder:</strong> ${comment}</p>` : ""}
+             <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`
+          );
+        }
+      } catch (mailErr) {
+        console.error("Failed to send leave reject mail:", mailErr);
+      }
+
+      await logAction(req.user.id, "LEAVE_REJECT", `Rejected leave request ${id}`);
+      return res.json(updated);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ----------------------------------------------------
+  // CHANGE REQUESTS ENDPOINTS
+  // ----------------------------------------------------
+
+  app.get("/api/change-requests", authenticate, async (req: any, res) => {
+    try {
+      const whereClause: any = {};
+      if (req.user.role === "EMPLOYEE") {
+        const emp = await prisma.employee.findUnique({ where: { userId: req.user.id } });
+        if (emp) {
+          whereClause.employeeId = emp.id;
+        }
+      }
+
+      const list = await prisma.shiftChangeRequest.findMany({
+        where: whereClause,
+        include: {
+          assignment: {
+            include: { shift: true },
+          },
+          employee: {
+            include: { user: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+      return res.json(list);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/change-requests", authenticate, async (req: any, res) => {
+    const { assignmentId, type, requestedStartTime, requestedEndTime, reason, comment } = req.body;
+    if (!assignmentId || !type || !reason) {
+      return res.status(400).json({ error: "Missing required details" });
+    }
+
+    try {
+      const emp = await prisma.employee.findUnique({ where: { userId: req.user.id } });
+      if (!emp) return res.status(400).json({ error: "Employee profile required" });
+
+      const request = await prisma.shiftChangeRequest.create({
+        data: {
+          assignmentId,
+          employeeId: emp.id,
+          type,
+          requestedStartTime,
+          requestedEndTime,
+          reason,
+          comment,
+          status: "PENDING",
+        },
+      });
+
+      // Notify Administrators
+      const admins = await prisma.user.findMany({ where: { role: "ADMINISTRATOR" } });
+      for (const admin of admins) {
+        await prisma.notification.create({
+          data: {
+            userId: admin.id,
+            title: "New Shift Change Request",
+            message: `${req.user.name} requested a shift change (${type})`,
+            link: "/admin/requests",
+          },
+        });
+
+        // Send email to Admin
+        try {
+          await sendEmailNotification(
+            admin.email,
+            `Nieuwe dienstwissel aanvraag van ${req.user.name}`,
+            `<h3>Nieuwe dienstwissel aanvraag ontvangen</h3>
+             <p>Medewerker <strong>${req.user.name}</strong> heeft een dienstwijziging aangevraagd:</p>
+             <ul>
+               <li><strong>Type:</strong> ${type}</li>
+               <li><strong>Reden:</strong> ${reason}</li>
+               ${requestedStartTime ? `<li><strong>Gewenste Tijd:</strong> ${requestedStartTime} - ${requestedEndTime}</li>` : ""}
+               ${comment ? `<li><strong>Toelichting:</strong> ${comment}</li>` : ""}
+             </ul>
+             <p>Beoordeel deze aanvraag in het beheercentrum.</p>
+             <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`
+          );
+        } catch (mailErr) {
+          console.error("Failed to send shift change admin mail:", mailErr);
+        }
+      }
+
+      await logAction(req.user.id, "SHIFT_CHANGE_REQUEST_CREATE", `Submitted shift change request: ${type}`);
+      return res.status(201).json(request);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/change-requests/:id/resolve", authenticate, requireAdmin, async (req: any, res) => {
+    const { id } = req.params;
+    const { status, comment } = req.body; // status must be "APPROVED" or "REJECTED"
+
+    if (status !== "APPROVED" && status !== "REJECTED") {
+      return res.status(400).json({ error: "Status must be APPROVED or REJECTED" });
+    }
+
+    try {
+      const reqDetails = await prisma.shiftChangeRequest.findUnique({
+        where: { id },
+        include: {
+          assignment: {
+            include: { shift: true },
+          },
+          employee: true,
+        },
+      });
+
+      if (!reqDetails) return res.status(404).json({ error: "Request not found" });
+
+      const updated = await prisma.shiftChangeRequest.update({
+        where: { id },
+        data: {
+          status,
+          comment,
+          approvalHistory: JSON.stringify([
+            { action: status, actor: req.user.name, date: new Date().toISOString(), comment },
+          ]),
+        },
+      });
+
+      // If approved and type is TIME_CHANGE, we can update the shift or keep as metadata
+      if (status === "APPROVED" && reqDetails.type === "TIME_CHANGE" && reqDetails.requestedStartTime && reqDetails.requestedEndTime) {
+        // Update shift time
+        await prisma.shift.update({
+          where: { id: reqDetails.assignment.shiftId },
+          data: {
+            startTime: reqDetails.requestedStartTime,
+            endTime: reqDetails.requestedEndTime,
+          },
+        });
+      } else if (status === "APPROVED" && reqDetails.type === "ABSENCE") {
+        // Remove assignment
+        await prisma.shiftAssignment.delete({ where: { id: reqDetails.assignmentId } });
+      }
+
+      // Notify employee
+      await prisma.notification.create({
+        data: {
+          userId: reqDetails.employee.userId,
+          title: `Shift Change ${status}`,
+          message: `Your shift change request has been ${status} by ${req.user.name}.`,
+          link: "/schedule",
+        },
+      });
+
+      // Send email to Employee
+      try {
+        const empUser = await prisma.user.findUnique({ where: { id: reqDetails.employee.userId } });
+        if (empUser && empUser.email) {
+          const vertaaldStatus = status === "APPROVED" ? "GOEDGEKEURD" : "GEWEIGERD";
+          await sendEmailNotification(
+            empUser.email,
+            `Dienstwissel aanvraag ${vertaaldStatus.toLowerCase()} - Het Verband Ternat`,
+            `<h3>Beste ${empUser.name},</h3>
+             <p>Uw aanvraag voor een dienstwijziging is <strong>${vertaaldStatus}</strong> door beheerder ${req.user.name}.</p>
+             ${comment ? `<p><strong>Opmerking beheerder:</strong> ${comment}</p>` : ""}
+             <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`
+          );
+        }
+      } catch (mailErr) {
+        console.error("Failed to send shift change resolve mail:", mailErr);
+      }
+
+      await logAction(req.user.id, "SHIFT_CHANGE_REQUEST_RESOLVE", `Resolved shift change request ${id} as ${status}`);
+      return res.json(updated);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ----------------------------------------------------
+  // SWAP REQUESTS ENDPOINTS
+  // ----------------------------------------------------
+
+  app.get("/api/swaps", authenticate, async (req: any, res) => {
+    try {
+      let whereClause: any = {};
+      if (req.user.role === "EMPLOYEE") {
+        const emp = await prisma.employee.findUnique({ where: { userId: req.user.id } });
+        if (emp) {
+          whereClause = {
+            OR: [
+              { requesterId: emp.id },
+              { targetId: emp.id },
+            ],
+          };
+        }
+      }
+
+      const list = await prisma.swapRequest.findMany({
+        where: whereClause,
+        include: {
+          shift: true,
+          targetShift: true,
+          requester: { include: { user: true } },
+          target: { include: { user: true } },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+      return res.json(list);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/swaps", authenticate, async (req: any, res) => {
+    const { shiftId, targetId, targetShiftId, reason, comment } = req.body;
+    if (!shiftId || !targetId || !reason) {
+      return res.status(400).json({ error: "Missing shift, target colleague, or reason" });
+    }
+
+    try {
+      const requesterEmp = await prisma.employee.findUnique({ where: { userId: req.user.id } });
+      if (!requesterEmp) return res.status(400).json({ error: "Employee profile required" });
+
+      if (requesterEmp.id === targetId) {
+        return res.status(400).json({ error: "Cannot swap with yourself" });
+      }
+
+      const swap = await prisma.swapRequest.create({
+        data: {
+          shiftId,
+          requesterId: requesterEmp.id,
+          targetId,
+          targetShiftId: targetShiftId || null,
+          status: "PENDING_TARGET",
+          reason,
+          comment,
+        },
+        include: {
+          shift: true,
+          requester: { include: { user: true } },
+          target: { include: { user: true } },
+        },
+      });
+
+      // Notify Target Colleague
+      await prisma.notification.create({
+        data: {
+          userId: swap.target.userId,
+          title: "Incoming Swap Request",
+          message: `${req.user.name} proposed swapping their shift (${swap.shift.name} on ${swap.shift.date}) with you.`,
+          link: "/swaps",
+        },
+      });
+
+      // Send email to Target Colleague
+      try {
+        if (swap.target.user.email) {
+          await sendEmailNotification(
+            swap.target.user.email,
+            `Denstruil voorstel van ${req.user.name}`,
+            `<h3>Beste ${swap.target.user.name},</h3>
+             <p>Uw collega <strong>${req.user.name}</strong> heeft voorgesteld om een shift met u te ruilen:</p>
+             <ul>
+               <li><strong>Hun Shift:</strong> ${swap.shift.name} op ${swap.shift.date} (${swap.shift.startTime} - ${swap.shift.endTime})</li>
+               <li><strong>Reden:</strong> ${reason}</li>
+             </ul>
+             <p>U kunt dit voorstel accepteren of weigeren op het Ruilbord in de app.</p>
+             <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`
+          );
+        }
+      } catch (mailErr) {
+        console.error("Failed to send swap proposal mail:", mailErr);
+      }
+
+      await logAction(req.user.id, "SWAP_REQUEST_CREATE", `Proposed shift swap with colleague ${targetId}`);
+      return res.status(201).json(swap);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/swaps/:id/respond", authenticate, async (req: any, res) => {
+    const { id } = req.params;
+    const { response, comment } = req.body; // response must be "ACCEPT" or "DECLINE"
+
+    if (response !== "ACCEPT" && response !== "DECLINE") {
+      return res.status(400).json({ error: "Response must be ACCEPT or DECLINE" });
+    }
+
+    try {
+      const swap = await prisma.swapRequest.findUnique({
+        where: { id },
+        include: {
+          shift: true,
+          requester: { include: { user: true } },
+          target: true,
+        },
+      });
+
+      if (!swap) return res.status(404).json({ error: "Swap request not found" });
+
+      if (swap.target.userId !== req.user.id) {
+        return res.status(403).json({ error: "Forbidden: You are not the target of this swap" });
+      }
+
+      const nextStatus = response === "ACCEPT" ? "ACCEPTED_TARGET" : "REJECTED_TARGET";
+
+      const updated = await prisma.swapRequest.update({
+        where: { id },
+        data: {
+          status: nextStatus,
+          comment: comment || swap.comment,
+        },
+      });
+
+      // Notify Requester
+      await prisma.notification.create({
+        data: {
+          userId: swap.requester.userId,
+          title: `Colleague Responded to Swap`,
+          message: `${req.user.name} has ${response}D your swap proposal for ${swap.shift.name} on ${swap.shift.date}.`,
+          link: "/swaps",
+        },
+      });
+
+      // Send email to Requester
+      try {
+        if (swap.requester.user.email) {
+          const vertaaldResponse = response === "ACCEPT" ? "geaccepteerd" : "geweigerd";
+          await sendEmailNotification(
+            swap.requester.user.email,
+            `Collega reageerde op ruildienst voorstel`,
+            `<h3>Beste ${swap.requester.user.name},</h3>
+             <p>Uw collega <strong>${req.user.name}</strong> heeft uw voorstel om diensten te ruilen voor <strong>${swap.shift.name} op ${swap.shift.date}</strong> <strong>${vertaaldResponse}</strong>.</p>
+             ${response === "ACCEPT" ? "<p>De aanvraag ligt nu bij de beheerder voor definitieve goedkeuring.</p>" : ""}
+             <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`
+          );
+        }
+      } catch (mailErr) {
+        console.error("Failed to send swap response mail:", mailErr);
+      }
+
+      if (response === "ACCEPT") {
+        // Notify Admins for final approval
+        const admins = await prisma.user.findMany({ where: { role: "ADMINISTRATOR" } });
+        for (const admin of admins) {
+          await prisma.notification.create({
+            data: {
+              userId: admin.id,
+              title: "Swap Ready for Approval",
+              message: `Swap request between ${swap.requester.user.name} and ${req.user.name} was accepted. Needs admin approval.`,
+              link: "/admin/swaps",
+            },
+          });
+
+          // Send email to Admin
+          try {
+            await sendEmailNotification(
+              admin.email,
+              `Dienstruil gereed voor goedkeuring`,
+              `<h3>Dienstruil wacht op goedkeuring</h3>
+               <p>De ruildienst tussen <strong>${swap.requester.user.name}</strong> en <strong>${req.user.name}</strong> is onderling geaccepteerd en vereist uw goedkeuring als beheerder.</p>
+               <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`
+            );
+          } catch (mailErr) {
+            console.error("Failed to send swap admin notification mail:", mailErr);
+          }
+        }
+      }
+
+      await logAction(req.user.id, "SWAP_REQUEST_RESPONSE", `Responded ${response} to swap request ${id}`);
+      return res.json(updated);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/swaps/:id/approve", authenticate, requireAdmin, async (req: any, res) => {
+    const { id } = req.params;
+    const { status } = req.body; // "APPROVED_ADMIN" or "REJECTED_ADMIN"
+
+    if (status !== "APPROVED_ADMIN" && status !== "REJECTED_ADMIN") {
+      return res.status(400).json({ error: "Status must be APPROVED_ADMIN or REJECTED_ADMIN" });
+    }
+
+    try {
+      const swap = await prisma.swapRequest.findUnique({
+        where: { id },
+        include: {
+          shift: true,
+          targetShift: true,
+          requester: { include: { user: true } },
+          target: { include: { user: true } },
+        },
+      });
+
+      if (!swap) return res.status(404).json({ error: "Swap request not found" });
+
+      const updated = await prisma.swapRequest.update({
+        where: { id },
+        data: { status },
+      });
+
+      if (status === "APPROVED_ADMIN") {
+        // Swap Assignments in Database!
+        // 1. Remove requester from requester shift and assign target
+        await prisma.shiftAssignment.deleteMany({
+          where: { shiftId: swap.shiftId, employeeId: swap.requesterId },
+        });
+        await prisma.shiftAssignment.create({
+          data: { shiftId: swap.shiftId, employeeId: swap.targetId, status: "ASSIGNED" },
+        });
+
+        // 2. If there's a target shift, swap that too
+        if (swap.targetShiftId) {
+          await prisma.shiftAssignment.deleteMany({
+            where: { shiftId: swap.targetShiftId, employeeId: swap.targetId },
+          });
+          await prisma.shiftAssignment.create({
+            data: { shiftId: swap.targetShiftId, employeeId: swap.requesterId, status: "ASSIGNED" },
+          });
+        }
+      }
+
+      // Notify both participants
+      await prisma.notification.create({
+        data: {
+          userId: swap.requester.userId,
+          title: `Swap Request ${status === "APPROVED_ADMIN" ? "Approved" : "Rejected"}`,
+          message: `Your shift swap has been ${status === "APPROVED_ADMIN" ? "APPROVED" : "REJECTED"} by Admin ${req.user.name}.`,
+          link: "/schedule",
+        },
+      });
+
+      await prisma.notification.create({
+        data: {
+          userId: swap.target.userId,
+          title: `Swap Request ${status === "APPROVED_ADMIN" ? "Approved" : "Rejected"}`,
+          message: `Your shift swap has been ${status === "APPROVED_ADMIN" ? "APPROVED" : "REJECTED"} by Admin ${req.user.name}.`,
+          link: "/schedule",
+        },
+      });
+
+      // Send email to Requester & Target
+      try {
+        const vertaaldStatus = status === "APPROVED_ADMIN" ? "GOEDGEKEURD" : "GEWEIGERD";
+        const emailBody = `<h3>Beste collega,</h3>
+          <p>De ruildienst tussen <strong>${swap.requester.user.name}</strong> en <strong>${swap.target.user.name}</strong> is <strong>${vertaaldStatus}</strong> door beheerder ${req.user.name}.</p>
+          <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`;
+
+        if (swap.requester.user.email) {
+          await sendEmailNotification(swap.requester.user.email, `Dienstruil ${vertaaldStatus.toLowerCase()} door beheerder`, emailBody);
+        }
+        if (swap.target.user.email) {
+          await sendEmailNotification(swap.target.user.email, `Dienstruil ${vertaaldStatus.toLowerCase()} door beheerder`, emailBody);
+        }
+      } catch (mailErr) {
+        console.error("Failed to send swap resolve emails:", mailErr);
+      }
+
+      await logAction(req.user.id, "SWAP_REQUEST_ADMIN_RESOLVE", `Admin resolved swap request ${id} as ${status}`);
+      return res.json(updated);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ----------------------------------------------------
+  // AVAILABILITY ENDPOINTS
+  // ----------------------------------------------------
+
+  app.get("/api/availabilities/:employeeId", authenticate, async (req, res) => {
+    const { employeeId } = req.params;
+    try {
+      const list = await prisma.availability.findMany({
+        where: { employeeId },
+      });
+      return res.json(list);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/availabilities", authenticate, async (req: any, res) => {
+    const { employeeId, dayOfWeek, date, isAvailable, isSpecificDate, startTime, endTime } = req.body;
+    if (!employeeId) return res.status(400).json({ error: "Missing employee ID" });
+
+    try {
+      const emp = await prisma.employee.findUnique({
+        where: { id: employeeId },
+      });
+      if (!emp) return res.status(404).json({ error: "Employee profile not found" });
+
+      if (req.user.role !== "ADMINISTRATOR" && emp.userId !== req.user.id) {
+        return res.status(403).json({ error: "Forbidden: Cannot update other's availability" });
+      }
+
+      let availability;
+      if (isSpecificDate && date) {
+        // Upsert by specific date
+        const existing = await prisma.availability.findFirst({
+          where: { employeeId, date, isSpecificDate: true },
+        });
+
+        if (existing) {
+          availability = await prisma.availability.update({
+            where: { id: existing.id },
+            data: { isAvailable, startTime: startTime || "00:00", endTime: endTime || "23:59" },
+          });
+        } else {
+          availability = await prisma.availability.create({
+            data: { employeeId, date, isSpecificDate: true, isAvailable, startTime: startTime || "00:00", endTime: endTime || "23:59" },
+          });
+        }
+      } else if (dayOfWeek !== undefined) {
+        // Upsert by recurring day of week
+        const existing = await prisma.availability.findFirst({
+          where: { employeeId, dayOfWeek, isSpecificDate: false },
+        });
+
+        if (existing) {
+          availability = await prisma.availability.update({
+            where: { id: existing.id },
+            data: { isAvailable, startTime: startTime || "00:00", endTime: endTime || "23:59" },
+          });
+        } else {
+          availability = await prisma.availability.create({
+            data: { employeeId, dayOfWeek: Number(dayOfWeek), isSpecificDate: false, isAvailable, startTime: startTime || "00:00", endTime: endTime || "23:59" },
+          });
+        }
+      } else {
+        return res.status(400).json({ error: "Provide either dayOfWeek or specific date" });
+      }
+
+      await logAction(req.user.id, "AVAILABILITY_UPDATE", `Updated availability settings for employee ${employeeId}`);
+      return res.json(availability);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ----------------------------------------------------
+  // ANNOUNCEMENTS ENDPOINTS
+  // ----------------------------------------------------
+
+  app.get("/api/announcements", authenticate, async (req, res) => {
+    try {
+      const list = await prisma.announcement.findMany({
+        include: { author: { select: { name: true } } },
+        orderBy: { createdAt: "desc" },
+      });
+      return res.json(list);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/announcements", authenticate, requireAdmin, async (req: any, res) => {
+    const { title, content } = req.body;
+    if (!title || !content) return res.status(400).json({ error: "Missing title or content" });
+
+    try {
+      const announcement = await prisma.announcement.create({
+        data: {
+          title,
+          content,
+          authorId: req.user.id,
+        },
+      });
+
+      // Create local notifications for everyone
+      const users = await prisma.user.findMany({});
+      for (const u of users) {
+        await prisma.notification.create({
+          data: {
+            userId: u.id,
+            title: "New Announcement",
+            message: `Admin posted: ${title}`,
+            link: "/dashboard",
+          },
+        });
+      }
+
+      await logAction(req.user.id, "ANNOUNCEMENT_CREATE", `Created announcement: ${title}`);
+      return res.status(201).json(announcement);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ----------------------------------------------------
+  // NOTIFICATIONS ENDPOINTS
+  // ----------------------------------------------------
+
+  app.get("/api/notifications", authenticate, async (req: any, res) => {
+    try {
+      const list = await prisma.notification.findMany({
+        where: { userId: req.user.id },
+        orderBy: { createdAt: "desc" },
+      });
+      return res.json(list);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/notifications/:id/read", authenticate, async (req: any, res) => {
+    const { id } = req.params;
+    try {
+      await prisma.notification.updateMany({
+        where: { id, userId: req.user.id },
+        data: { isRead: true },
+      });
+      return res.json({ success: true });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ----------------------------------------------------
+  // REPORTS ENDPOINTS
+  // ----------------------------------------------------
+
+  app.get("/api/reports/summary", authenticate, requireAdmin, async (req, res) => {
+    try {
+      // Basic reports: shift counts, leave counters, employee metrics
+      const employeeCount = await prisma.employee.count();
+      const pendingLeaveCount = await prisma.leaveRequest.count({ where: { status: "PENDING" } });
+      const pendingSwapCount = await prisma.swapRequest.count({ where: { status: "ACCEPTED_TARGET" } });
+      const totalShifts = await prisma.shift.count();
+
+      const employees = await prisma.employee.findMany({
+        include: {
+          user: true,
+          assignments: {
+            include: { shift: true },
+          },
+        },
+      });
+
+      // Calculate total allocated hours per employee
+      const employeeStats = employees.map((emp) => {
+        let totalHours = 0;
+        emp.assignments.forEach((a) => {
+          try {
+            const startHour = Number(a.shift.startTime.split(":")[0]);
+            const startMin = Number(a.shift.startTime.split(":")[1]);
+            const endHour = Number(a.shift.endTime.split(":")[0]);
+            const endMin = Number(a.shift.endTime.split(":")[1]);
+            let hours = endHour - startHour + (endMin - startMin) / 60;
+            if (hours < 0) hours += 24; // Handle night shifts spanning midnight
+            totalHours += hours;
+          } catch (e) {}
+        });
+
+        return {
+          id: emp.id,
+          name: emp.user.name,
+          email: emp.user.email,
+          assignedHours: totalHours,
+          assignmentCount: emp.assignments.length,
+        };
+      });
+
+      return res.json({
+        employeeCount,
+        pendingLeaveCount,
+        pendingSwapCount,
+        totalShifts,
+        employeeStats,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ----------------------------------------------------
+  // AUDIT LOGS ENDPOINTS
+  // ----------------------------------------------------
+
+  app.get("/api/audit-logs", authenticate, requireAdmin, async (req, res) => {
+    try {
+      const logs = await prisma.auditLog.findMany({
+        include: { user: { select: { name: true, email: true } } },
+        orderBy: { createdAt: "desc" },
+        take: 100,
+      });
+      return res.json(logs);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ----------------------------------------------------
+  // EMAILS ENDPOINTS
+  // ----------------------------------------------------
+
+  app.get("/api/emails", authenticate, requireAdmin, async (req, res) => {
+    try {
+      const list = getSentEmails();
+      return res.json(list);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ----------------------------------------------------
+  // ADMIN STAFF MANAGEMENT ENDPOINTS
+  // ----------------------------------------------------
+
+  app.get("/api/admin/employees", authenticate, requireAdmin, async (req, res) => {
+    try {
+      const list = await prisma.user.findMany({
+        include: { employee: true },
+        orderBy: { name: "asc" },
+      });
+      return res.json(list);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/admin/employees", authenticate, requireAdmin, async (req: any, res) => {
+    const { email, password, name, role } = req.body;
+    if (!email || !password || !name) {
+      return res.status(400).json({ error: "E-mail, naam en wachtwoord zijn verplicht." });
+    }
+
+    try {
+      const existingUser = await prisma.user.findUnique({ where: { email } });
+      if (existingUser) {
+        return res.status(400).json({ error: "Er bestaat al een account met dit e-mailadres." });
+      }
+
+      const passwordHash = hashPassword(password);
+      const user = await prisma.user.create({
+        data: {
+          email,
+          passwordHash,
+          name,
+          role: role || "EMPLOYEE",
+        },
+      });
+
+      let employee = null;
+      if (user.role === "EMPLOYEE") {
+        employee = await prisma.employee.create({
+          data: {
+            userId: user.id,
+            preferredShifts: "[]",
+            preferredColleagues: "[]",
+          },
+        });
+      }
+
+      await logAction(req.user.id, "ADMIN_CREATE_USER", `Beheerder heeft gebruiker ${user.email} aangemaakt met de rol ${user.role}`);
+      return res.status(201).json({ user: { id: user.id, email: user.email, role: user.role, name: user.name, employee } });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/admin/employees/:id", authenticate, requireAdmin, async (req: any, res) => {
+    const { id } = req.params;
+    if (id === req.user.id) {
+      return res.status(400).json({ error: "U kunt uw eigen account niet verwijderen." });
+    }
+
+    try {
+      const targetUser = await prisma.user.findUnique({
+        where: { id },
+        include: { employee: true },
+      });
+
+      if (!targetUser) {
+        return res.status(404).json({ error: "Gebruiker niet gevonden." });
+      }
+
+      // If they are an employee, delete related records first to prevent SQLite FK constraint errors
+      if (targetUser.employee) {
+        const empId = targetUser.employee.id;
+        await prisma.shiftAssignment.deleteMany({ where: { employeeId: empId } });
+        await prisma.availability.deleteMany({ where: { employeeId: empId } });
+        await prisma.leaveRequest.deleteMany({ where: { employeeId: empId } });
+        await prisma.shiftChangeRequest.deleteMany({ where: { employeeId: empId } });
+        await prisma.swapRequest.deleteMany({
+          where: {
+            OR: [
+              { requesterId: empId },
+              { targetId: empId }
+            ]
+          }
+        });
+        await prisma.employee.delete({ where: { id: empId } });
+      }
+
+      await prisma.notification.deleteMany({ where: { userId: id } });
+      await prisma.announcement.deleteMany({ where: { authorId: id } });
+      await prisma.user.delete({ where: { id } });
+
+      await logAction(req.user.id, "ADMIN_DELETE_USER", `Beheerder heeft account ${targetUser.email} verwijderd`);
+      return res.json({ success: true });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/admin/employees/:id", authenticate, requireAdmin, async (req: any, res) => {
+    const { id } = req.params;
+    const { name, email, role, password } = req.body;
+
+    try {
+      const userToUpdate = await prisma.user.findUnique({
+        where: { id },
+        include: { employee: true },
+      });
+
+      if (!userToUpdate) {
+        return res.status(404).json({ error: "Gebruiker niet gevonden." });
+      }
+
+      // Check email collision
+      if (email && email !== userToUpdate.email) {
+        const collision = await prisma.user.findUnique({ where: { email } });
+        if (collision) {
+          return res.status(400).json({ error: "Er bestaat al een account met dit e-mailadres." });
+        }
+      }
+
+      const updateData: any = {};
+      if (name) updateData.name = name;
+      if (email) updateData.email = email;
+      if (role) updateData.role = role;
+      if (password) {
+        updateData.passwordHash = hashPassword(password);
+      }
+
+      const updatedUser = await prisma.user.update({
+        where: { id },
+        data: updateData,
+      });
+
+      // Handle employee profile creation or deletion if role changes
+      if (updatedUser.role === "EMPLOYEE" && !userToUpdate.employee) {
+        await prisma.employee.create({
+          data: {
+            userId: updatedUser.id,
+            preferredShifts: "[]",
+            preferredColleagues: "[]",
+          },
+        });
+      }
+
+      await logAction(req.user.id, "ADMIN_UPDATE_USER", `Beheerder heeft account van ${updatedUser.email} bijgewerkt`);
+      return res.json({ success: true, user: { id: updatedUser.id, email: updatedUser.email, name: updatedUser.name, role: updatedUser.role } });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ----------------------------------------------------
+  // ADMIN SETTINGS ENDPOINTS
+  // ----------------------------------------------------
+
+  app.get("/api/admin/settings", authenticate, requireAdmin, async (req, res) => {
+    try {
+      const list = await prisma.setting.findMany({});
+      return res.json(list);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/admin/settings", authenticate, requireAdmin, async (req: any, res) => {
+    const settingsObj = req.body;
+    try {
+      for (const [key, value] of Object.entries(settingsObj)) {
+        await prisma.setting.upsert({
+          where: { key },
+          update: { value: String(value) },
+          create: { key, value: String(value), description: `${key} instelling` },
+        });
+      }
+      await logAction(req.user.id, "ADMIN_UPDATE_SETTINGS", "Beheerder heeft e-mail- of systeeminstellingen bijgewerkt");
+      return res.json({ success: true });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/admin/test-email", authenticate, requireAdmin, async (req: any, res) => {
+    const { to } = req.body;
+    if (!to) {
+      return res.status(400).json({ error: "Ontvanger e-mailadres is verplicht." });
+    }
+
+    try {
+      await sendEmailNotification(
+        to,
+        "Test E-mail - Het Verband Ternat Planner",
+        `<h3>Test succesvol!</h3>
+         <p>Beste beheerder,</p>
+         <p>Dit is een test e-mail om te bevestigen dat uw e-mailnotificatie-instellingen van Het Verband Ternat correct zijn geconfigureerd.</p>
+         <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`
+      );
+      return res.json({ success: true, message: "Test e-mail verzonden!" });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/admin/reset-db", authenticate, requireAdmin, async (req: any, res) => {
+    try {
+      // Clean up all tables in reverse dependency order
+      await prisma.shiftChangeRequest.deleteMany({});
+      await prisma.swapRequest.deleteMany({});
+      await prisma.shiftAssignment.deleteMany({});
+      await prisma.availability.deleteMany({});
+      await prisma.leaveRequest.deleteMany({});
+      await prisma.shift.deleteMany({});
+      await prisma.announcement.deleteMany({});
+      await prisma.setting.deleteMany({});
+      await prisma.notification.deleteMany({});
+      await prisma.auditLog.deleteMany({});
+      await prisma.employee.deleteMany({});
+      await prisma.user.deleteMany({});
+
+      const { seedDatabase } = await import("./server/seed.js");
+      await seedDatabase();
+
+      await logAction(null, "DB_RESET", "Database is succesvol gereset naar de standaard Nederlandse seeddata");
+      return res.json({ success: true, message: "Database is succesvol gereset!" });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ----------------------------------------------------
+  // VITE & STATIC FILES SERVING
+  // ----------------------------------------------------
+
+  if (process.env.NODE_ENV !== "production") {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: "spa",
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(process.cwd(), "dist");
+    app.use(express.static(distPath));
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
+    });
+  }
+
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Shift Planner server running on http://localhost:${PORT}`);
+  });
+}
+
+startServer();

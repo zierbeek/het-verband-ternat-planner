@@ -1,0 +1,176 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String         @id @default(uuid())
+  email        String         @unique
+  passwordHash String
+  name         String
+  role         String         // "ADMINISTRATOR", "EMPLOYEE"
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  employee     Employee?
+  notifications Notification[]
+  auditLogs    AuditLog[]
+  announcements Announcement[]
+}
+
+model Employee {
+  id                 String               @id @default(uuid())
+  userId             String               @unique
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  preferredShifts    String               @default("[]") // JSON string list of preferred shift names
+  preferredColleagues String              @default("[]") // JSON string list of employee IDs
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  assignments        ShiftAssignment[]
+  availabilities     Availability[]
+  leaveRequests      LeaveRequest[]
+  changeRequests     ShiftChangeRequest[]
+  sentSwaps          SwapRequest[]        @relation("RequesterSwaps")
+  receivedSwaps      SwapRequest[]        @relation("TargetSwaps")
+}
+
+model Shift {
+  id                String            @id @default(uuid())
+  name              String
+  startTime         String            // "HH:MM" or complete ISO string depending on usage
+  endTime           String            // "HH:MM" or complete ISO string
+  date              String            // "YYYY-MM-DD"
+  color             String            @default("#3b82f6")
+  requiredEmployees Int               @default(1)
+  notes             String?
+  templateId        String?
+  isRecurring       Boolean           @default(false)
+  recurrencePattern String?           // "DAILY", "WEEKLY", "BIWEEKLY", "MONTHLY"
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  assignments       ShiftAssignment[]
+  swaps             SwapRequest[]     @relation("RequesterShift")
+  targetSwaps       SwapRequest[]     @relation("TargetShift")
+}
+
+model ShiftAssignment {
+  id         String               @id @default(uuid())
+  shiftId    String
+  shift      Shift                @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  employeeId String
+  employee   Employee             @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  status     String               @default("ASSIGNED") // "ASSIGNED", "REJECTED", "PENDING_SWAP"
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+  changes    ShiftChangeRequest[]
+
+  @@unique([shiftId, employeeId])
+}
+
+model Availability {
+  id             String   @id @default(uuid())
+  employeeId     String
+  employee       Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  dayOfWeek      Int?     // 0 = Sunday, 1 = Monday, etc. (for recurring)
+  date           String?  // "YYYY-MM-DD" (for specific dates)
+  isAvailable    Boolean  @default(true)
+  isSpecificDate Boolean  @default(false)
+  startTime      String   @default("00:00")
+  endTime        String   @default("23:59")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model LeaveRequest {
+  id               String   @id @default(uuid())
+  employeeId       String
+  employee         Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  type             String   // "VACATION", "SICK_LEAVE", "TRAINING", "PERSONAL"
+  startDate        String   // "YYYY-MM-DD"
+  endDate          String   // "YYYY-MM-DD"
+  status           String   @default("PENDING") // "PENDING", "APPROVED", "REJECTED"
+  reason           String
+  comment          String?
+  approvalHistory  String   @default("[]") // JSON list of history logs
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model ShiftChangeRequest {
+  id                 String          @id @default(uuid())
+  assignmentId       String
+  assignment         ShiftAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  employeeId         String
+  employee           Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  type               String          // "TIME_CHANGE", "ABSENCE", "EXTRA_SHIFT"
+  requestedStartTime String?
+  requestedEndTime   String?
+  reason             String
+  comment            String?
+  status             String          @default("PENDING") // "PENDING", "APPROVED", "REJECTED"
+  approvalHistory    String          @default("[]") // JSON list of history logs
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+}
+
+model SwapRequest {
+  id               String    @id @default(uuid())
+  shiftId          String
+  shift            Shift     @relation("RequesterShift", fields: [shiftId], references: [id], onDelete: Cascade)
+  requesterId      String
+  requester        Employee  @relation("RequesterSwaps", fields: [requesterId], references: [id], onDelete: Cascade)
+  targetId         String
+  target           Employee  @relation("TargetSwaps", fields: [targetId], references: [id], onDelete: Cascade)
+  targetShiftId    String?
+  targetShift      Shift?    @relation("TargetShift", fields: [targetShiftId], references: [id], onDelete: SetNull)
+  status           String    @default("PENDING_TARGET") // "PENDING_TARGET", "ACCEPTED_TARGET", "REJECTED_TARGET", "APPROVED_ADMIN", "REJECTED_ADMIN"
+  reason           String
+  comment          String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String
+  details    String
+  oldValue   String?
+  newValue   String?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+}
+
+model Announcement {
+  id        String   @id @default(uuid())
+  title     String
+  content   String
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Setting {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

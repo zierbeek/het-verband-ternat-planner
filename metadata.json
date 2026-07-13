@@ -1,0 +1,6 @@
+{
+  "name": "Het Verband Ternat planner",
+  "description": "A self-hosted shift planning application for home nursing organizations, featuring recurring schedules, shift swaps, and leave management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
