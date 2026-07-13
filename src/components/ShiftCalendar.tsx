@@ -13,11 +13,43 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { Shift, Employee } from "../types.js";
+import { getUserColorStyle } from "../utils/userColor.ts";
 
 interface ShiftCalendarProps {
   user: any;
   token: string;
 }
+
+type PlannerSlot = "morning" | "afternoon";
+
+type PlannerDragItem =
+  | { type: "template"; slot: PlannerSlot }
+  | { type: "shift"; shiftId: string };
+
+const SLOT_CONFIG: Record<PlannerSlot, { label: string; startTime: string; endTime: string; color: string }> = {
+  morning: { label: "Voormiddag", startTime: "07:00", endTime: "15:00", color: "#10b981" },
+  afternoon: { label: "Namiddag", startTime: "15:00", endTime: "23:00", color: "#f59e0b" },
+};
+
+const parseTimeToMinutes = (time: string) => {
+  if (!time) return 0;
+  if (time.includes("T")) {
+    const date = new Date(time);
+    return date.getHours() * 60 + date.getMinutes();
+  }
+
+  const [hours, minutes] = time.slice(0, 5).split(":").map(Number);
+  return (Number.isFinite(hours) ? hours : 0) * 60 + (Number.isFinite(minutes) ? minutes : 0);
+};
+
+const getShiftSlot = (shift: Shift): PlannerSlot => {
+  const normalizedName = shift.name.toLowerCase();
+  if (normalizedName.includes("voormiddag") || normalizedName.includes("morning")) return "morning";
+  if (normalizedName.includes("namiddag") || normalizedName.includes("afternoon") || normalizedName.includes("late")) return "afternoon";
+  return parseTimeToMinutes(shift.startTime) < 12 * 60 ? "morning" : "afternoon";
+};
+
+const getEmployeeBadgeStyle = (employeeId?: string) => getUserColorStyle(employeeId, 0.14);
 
 export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -60,6 +92,8 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
 
   // Custom feedback state
   const [feedbackMessage, setFeedbackMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [draggedItem, setDraggedItem] = useState<PlannerDragItem | null>(null);
+  const [draggedSlot, setDraggedSlot] = useState<string | null>(null);
 
   const showFeedback = (text: string, type: "success" | "error" = "success") => {
     setFeedbackMessage({ text, type });
@@ -313,6 +347,72 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
     return shifts.filter((s) => s.date === dateStr);
   };
 
+  const getShiftsForDateAndSlot = (date: Date, slot: PlannerSlot) => {
+    return getShiftsForDate(date).filter((shift) => getShiftSlot(shift) === slot);
+  };
+
+  const handlePlannerDrop = async (date: Date, slot: PlannerSlot) => {
+    if (!draggedItem || user.role !== "ADMINISTRATOR") return;
+
+    const slotConfig = SLOT_CONFIG[slot];
+    const dateStr = date.toISOString().split("T")[0];
+
+    try {
+      if (draggedItem.type === "template") {
+        const res = await fetch("/api/shifts", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            name: slotConfig.label,
+            startTime: slotConfig.startTime,
+            endTime: slotConfig.endTime,
+            date: dateStr,
+            color: slotConfig.color,
+            requiredEmployees: 1,
+          }),
+        });
+
+        if (res.ok) {
+          showFeedback(`${slotConfig.label} gepland op ${dateStr}`);
+          fetchShifts();
+        } else {
+          const err = await res.json();
+          showFeedback(err.error || "Fout bij het aanmaken van de shift", "error");
+        }
+      } else {
+        const res = await fetch(`/api/shifts/${draggedItem.shiftId}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            date: dateStr,
+            startTime: slotConfig.startTime,
+            endTime: slotConfig.endTime,
+          }),
+        });
+
+        if (res.ok) {
+          showFeedback(`Shift verplaatst naar ${slotConfig.label.toLowerCase()} op ${dateStr}`);
+          fetchShifts();
+        } else {
+          const err = await res.json();
+          showFeedback(err.error || "Fout bij het verplaatsen van de shift", "error");
+        }
+      }
+    } catch (error) {
+      console.error(error);
+      showFeedback("Fout bij het verwerken van de sleepactie", "error");
+    } finally {
+      setDraggedItem(null);
+      setDraggedSlot(null);
+    }
+  };
+
   const getLeavesForDate = (date: Date) => {
     const dateStr = date.toISOString().split("T")[0];
     return leaveRequests.filter((leave) => {
@@ -488,7 +588,10 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                       {getLeavesForDate(date).map((leave) => (
                         <div
                           key={`leave-${leave.id}`}
-                          style={{ borderLeftColor: leave.status === "APPROVED" ? "#f43f5e" : "#f59e0b" }}
+                          style={{
+                            borderLeftColor: leave.status === "APPROVED" ? "#f43f5e" : "#f59e0b",
+                            ...getEmployeeBadgeStyle(leave.employeeId),
+                          }}
                           className={`px-1.5 py-0.5 border-l-2 rounded-r text-[10px] font-semibold truncate ${
                             leave.status === "APPROVED"
                               ? "bg-red-50 text-red-700"
@@ -510,6 +613,37 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
         {/* Week View */}
         {viewType === "week" && (
           <div>
+            {user.role === "ADMINISTRATOR" && !isPrintMode && (
+              <div className="p-4 bg-slate-900 text-white border-b border-slate-800">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-bold tracking-tight">Snelle planning</h3>
+                    <p className="text-xs text-slate-300 mt-0.5">
+                      Sleep een template naar een dagdeel, of versleep een bestaande shift naar een ander vak of een andere dag.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {(Object.keys(SLOT_CONFIG) as PlannerSlot[]).map((slot) => {
+                      const config = SLOT_CONFIG[slot];
+                      return (
+                        <button
+                          key={slot}
+                          type="button"
+                          draggable
+                          onDragStart={() => setDraggedItem({ type: "template", slot })}
+                          onDragEnd={() => setDraggedItem(null)}
+                          className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-white/10 hover:bg-white/15 text-xs font-bold transition cursor-grab active:cursor-grabbing"
+                        >
+                          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: config.color }} />
+                          {config.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-7 bg-slate-50/70 border-b border-slate-200 py-3.5 text-center">
               {weekDates.map((date, idx) => (
                 <div key={idx} className="space-y-1">
@@ -525,52 +659,90 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
 
             <div className="grid grid-cols-7 divide-x divide-slate-200 min-h-[400px]">
               {weekDates.map((date, idx) => {
-                const dayShifts = getShiftsForDate(date);
+                const morningShifts = getShiftsForDateAndSlot(date, "morning");
+                const afternoonShifts = getShiftsForDateAndSlot(date, "afternoon");
+                const dayKey = date.toISOString().split("T")[0];
                 return (
-                  <div key={idx} className="p-3 bg-white space-y-2 flex flex-col">
-                    {dayShifts.length === 0 ? (
-                      <span className="text-[11px] text-slate-300 italic self-center mt-8">
-                        Geen shifts
-                      </span>
-                    ) : (
-                      dayShifts.map((shift) => (
+                  <div key={idx} className="p-2 bg-white space-y-2 flex flex-col">
+                    {[
+                      { key: "morning" as const, label: "Voormiddag", shifts: morningShifts },
+                      { key: "afternoon" as const, label: "Namiddag", shifts: afternoonShifts },
+                    ].map((slot) => {
+                      const slotKey = `${dayKey}-${slot.key}`;
+
+                      return (
                         <div
-                          key={shift.id}
-                          onClick={() => {
-                            if (user.role === "ADMINISTRATOR") {
-                              setSelectedShift(shift);
-                              setIsEditModalOpen(true);
-                            }
+                          key={slot.key}
+                          onDragOver={(event) => {
+                            event.preventDefault();
+                            setDraggedSlot(slotKey);
                           }}
-                          style={{ borderLeftColor: shift.color }}
-                          className="p-2.5 border-l-4 rounded-r-xl bg-slate-50/70 hover:bg-slate-50 border border-slate-200 transition cursor-pointer flex flex-col gap-1.5 shadow-2xs"
+                          onDragLeave={() => {
+                            if (draggedSlot === slotKey) setDraggedSlot(null);
+                          }}
+                          onDrop={() => handlePlannerDrop(date, slot.key)}
+                          className={`rounded-xl border p-2 min-h-[130px] flex flex-col gap-2 transition ${
+                            draggedSlot === slotKey
+                              ? "border-blue-400 bg-blue-50/60"
+                              : "border-slate-200 bg-slate-50/40"
+                          }`}
                         >
-                          <span className="font-bold text-slate-800 text-[11px] truncate">
-                            {shift.name}
-                          </span>
-                          <div className="flex items-center gap-1 text-[10px] text-slate-500 font-medium">
-                            <Clock className="h-3 w-3 shrink-0" /> {shift.startTime} - {shift.endTime}
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">{slot.label}</span>
+                            {user.role === "ADMINISTRATOR" && <span className="text-[9px] text-slate-400">Drop hier</span>}
                           </div>
-                          
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {shift.assignments && shift.assignments.length > 0 ? (
-                              shift.assignments.map((assign: any) => (
-                                <span
-                                  key={assign.id}
-                                  className="bg-blue-50 text-blue-700 text-[9px] font-semibold px-1.5 py-0.5 rounded-full border border-blue-100/50 truncate max-w-full"
-                                >
-                                  {assign.employee.user.name.split(" ")[0]}
-                                </span>
-                              ))
+
+                          <div className="space-y-1.5 flex-1">
+                            {slot.shifts.length === 0 ? (
+                              <div className="text-[10px] text-slate-300 italic border border-dashed border-slate-200 rounded-lg px-2 py-3 text-center">
+                                Sleep een shift of template hier
+                              </div>
                             ) : (
-                              <span className="text-red-500 text-[9px] font-bold bg-red-50 px-1.5 rounded-full">
-                                Onbezet
-                              </span>
+                              slot.shifts.map((shift) => (
+                                <div
+                                  key={shift.id}
+                                  draggable={user.role === "ADMINISTRATOR"}
+                                  onDragStart={() => setDraggedItem({ type: "shift", shiftId: shift.id })}
+                                  onDragEnd={() => setDraggedItem(null)}
+                                  onClick={() => {
+                                    if (user.role === "ADMINISTRATOR") {
+                                      setSelectedShift(shift);
+                                      setIsEditModalOpen(true);
+                                    }
+                                  }}
+                                  style={{ borderLeftColor: shift.color }}
+                                  className="p-2 border-l-4 rounded-r-xl bg-white hover:bg-slate-50 border border-slate-200 transition cursor-pointer flex flex-col gap-1 shadow-2xs"
+                                >
+                                  <span className="font-bold text-slate-800 text-[11px] truncate">{shift.name}</span>
+                                  <div className="flex items-center gap-1 text-[10px] text-slate-500 font-medium">
+                                    <Clock className="h-3 w-3 shrink-0" /> {shift.startTime} - {shift.endTime}
+                                  </div>
+
+                                  <div className="flex flex-wrap gap-1 mt-0.5">
+                                    {shift.assignments && shift.assignments.length > 0 ? (
+                                      shift.assignments.map((assign: any) => (
+                                        <span
+                                          key={assign.id}
+                                          style={getEmployeeBadgeStyle(assign.employeeId)}
+                                          className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full border truncate max-w-full"
+                                          className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full border truncate max-w-full"
+                                        >
+                                          {assign.employee.user.name.split(" ")[0]}
+                                        </span>
+                                      ))
+                                    ) : (
+                                      <span className="text-red-500 text-[9px] font-bold bg-red-50 px-1.5 rounded-full">
+                                        Onbezet
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              ))
                             )}
                           </div>
                         </div>
-                      ))
-                    )}
+                      );
+                    })}
 
                     {/* Approved Leaves in Week View */}
                     {getLeavesForDate(date).length > 0 && (
@@ -608,6 +780,69 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
               <CalendarIcon className="h-5 w-5 text-blue-500" />
               Dienstregeling voor {currentDate.toLocaleDateString("nl-BE", { weekday: "long", month: "long", day: "numeric" })}
             </h3>
+
+            {user.role === "ADMINISTRATOR" && !isPrintMode && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5">
+                {(Object.keys(SLOT_CONFIG) as PlannerSlot[]).map((slot) => {
+                  const config = SLOT_CONFIG[slot];
+                  const slotKey = `${currentDate.toISOString().split("T")[0]}-${slot}`;
+                  const slotShifts = getShiftsForDateAndSlot(currentDate, slot);
+
+                  return (
+                    <div
+                      key={slot}
+                      onDragOver={(event) => {
+                        event.preventDefault();
+                        setDraggedSlot(slotKey);
+                      }}
+                      onDragLeave={() => {
+                        if (draggedSlot === slotKey) setDraggedSlot(null);
+                      }}
+                      onDrop={() => handlePlannerDrop(currentDate, slot)}
+                      className={`rounded-2xl border p-4 transition ${
+                        draggedSlot === slotKey ? "border-blue-400 bg-blue-50/60" : "border-slate-200 bg-slate-50/50"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2 mb-3">
+                        <div>
+                          <h4 className="text-sm font-bold text-slate-900">{config.label}</h4>
+                          <p className="text-[11px] text-slate-500">Sleep een shift of template hier</p>
+                        </div>
+                        <span className="h-3 w-3 rounded-full" style={{ backgroundColor: config.color }} />
+                      </div>
+
+                      <div className="space-y-2 min-h-[110px]">
+                        {slotShifts.length === 0 ? (
+                          <div className="text-[10px] italic text-slate-400 border border-dashed border-slate-200 rounded-lg px-3 py-6 text-center bg-white/70">
+                            Nog geen shift in dit dagdeel
+                          </div>
+                        ) : (
+                          slotShifts.map((shift) => (
+                            <div
+                              key={shift.id}
+                              draggable
+                              onDragStart={() => setDraggedItem({ type: "shift", shiftId: shift.id })}
+                              onDragEnd={() => setDraggedItem(null)}
+                              onClick={() => {
+                                setSelectedShift(shift);
+                                setIsEditModalOpen(true);
+                              }}
+                              style={{ borderLeftColor: shift.color }}
+                              className="p-3 border-l-4 rounded-r-xl bg-white border border-slate-200 shadow-2xs cursor-pointer"
+                            >
+                              <div className="font-bold text-slate-800 text-xs truncate">{shift.name}</div>
+                              <div className="text-[10px] text-slate-500 mt-0.5">
+                                {shift.startTime} - {shift.endTime}
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             <div className="space-y-3">
               {getShiftsForDate(currentDate).length === 0 ? (
@@ -650,7 +885,8 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                         shift.assignments.map((assign: any) => (
                           <span
                             key={assign.id}
-                            className="bg-blue-50 text-blue-700 text-xs font-semibold px-2.5 py-1 rounded-full border border-blue-100 flex items-center gap-1.5"
+                            style={getEmployeeBadgeStyle(assign.employeeId)}
+                            className="text-xs font-semibold px-2.5 py-1 rounded-full border flex items-center gap-1.5"
                           >
                             <User className="h-3.5 w-3.5" /> {assign.employee.user.name}
                           </span>

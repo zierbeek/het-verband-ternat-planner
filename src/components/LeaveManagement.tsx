@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { ClipboardList, Plus, FileText, Calendar, Check, X, ShieldAlert, BadgeInfo } from "lucide-react";
 import { LeaveRequest } from "../types.js";
+import { getUserColorStyle } from "../utils/userColor.ts";
 
 interface LeaveManagementProps {
   user: any;
@@ -184,7 +185,10 @@ export default function LeaveManagement({ user, token }: LeaveManagementProps) {
                         {translateLeaveType(leave.type)}
                       </span>
                       {user.role === "ADMINISTRATOR" && leave.employee?.user && (
-                        <p className="font-bold text-slate-800 text-sm mt-1.5 flex items-center gap-1.5">
+                        <p
+                          style={getUserColorStyle(leave.employeeId, 0.14)}
+                          className="font-bold text-slate-800 text-sm mt-1.5 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border"
+                        >
                           {leave.employee.user.name}
                         </p>
                       )}

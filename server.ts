@@ -3,7 +3,7 @@ import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { prisma } from "./server/db.js";
-import { hashPassword, comparePassword, generateToken, verifyToken } from "./server/auth.js";
+import { hashPassword, comparePassword, generateToken, verifyToken, generateEmailActionToken, verifyEmailActionToken, generateAdminEmailActionToken, verifyAdminEmailActionToken } from "./server/auth.js";
 import { seedDatabase } from "./server/seed.js";
 
 async function startServer() {
@@ -61,6 +61,17 @@ async function startServer() {
     } catch (e) {
       console.error("Failed to write emails file", e);
     }
+  }
+
+  function getPublicBaseUrl(req: any) {
+    const configured = process.env.APP_URL;
+    if (configured) {
+      return configured.replace(/\/$/, "");
+    }
+
+    const forwardedProto = String(req.headers["x-forwarded-proto"] || req.protocol || "http").split(",")[0].trim();
+    const forwardedHost = String(req.headers["x-forwarded-host"] || req.headers.host || "localhost:3000").split(",")[0].trim();
+    return `${forwardedProto}://${forwardedHost}`;
   }
 
   async function sendEmailNotification(to: string, subject: string, bodyHtml: string) {
@@ -157,6 +168,24 @@ async function startServer() {
 
     saveSentEmail(emailEntry);
     console.log(`[EMAIL DISPATCH] To: ${to} | Subject: ${subject} | Status: ${status}`);
+  }
+
+  function buildSwapDetailsHtml(swap: { shift: any; targetShift?: any; requester: any; target: any; reason: string; comment?: string | null }) {
+    return `
+      <ul>
+        <li><strong>Te geven shift:</strong> ${swap.shift.name} op ${swap.shift.date} (${swap.shift.startTime} - ${swap.shift.endTime})</li>
+        ${swap.targetShift ? `<li><strong>Te ontvangen shift:</strong> ${swap.targetShift.name} op ${swap.targetShift.date} (${swap.targetShift.startTime} - ${swap.targetShift.endTime})</li>` : "<li><strong>Te ontvangen shift:</strong> Niet ingevuld, open ruil</li>"}
+        <li><strong>Reden:</strong> ${swap.reason}</li>
+        ${swap.comment ? `<li><strong>Opmerking:</strong> ${swap.comment}</li>` : ""}
+      </ul>`;
+  }
+
+  function buildSwapActionButtons(baseUrl: string, acceptPath: string, declinePath: string) {
+    return `
+      <p style="margin:20px 0;">
+        <a href="${baseUrl}${acceptPath}" style="display:inline-block;padding:10px 16px;background:#16a34a;color:#fff;text-decoration:none;border-radius:8px;font-weight:700;margin-right:8px;">Accepteren</a>
+        <a href="${baseUrl}${declinePath}" style="display:inline-block;padding:10px 16px;background:#dc2626;color:#fff;text-decoration:none;border-radius:8px;font-weight:700;">Weigeren</a>
+      </p>`;
   }
 
   // Auth Middleware
@@ -1465,6 +1494,33 @@ async function startServer() {
         return res.status(400).json({ error: "Cannot swap with yourself" });
       }
 
+      const targetEmployee = await prisma.employee.findUnique({
+        where: { id: targetId },
+        include: { user: true },
+      });
+
+      if (!targetEmployee) {
+        return res.status(404).json({ error: "Target colleague not found" });
+      }
+
+      const requesterShift = await prisma.shift.findUnique({ where: { id: shiftId } });
+      if (!requesterShift) {
+        return res.status(404).json({ error: "Shift not found" });
+      }
+
+      const existingPending = await prisma.swapRequest.findFirst({
+        where: {
+          shiftId,
+          requesterId: requesterEmp.id,
+          targetId,
+          status: { in: ["PENDING_TARGET", "ACCEPTED_TARGET"] },
+        },
+      });
+
+      if (existingPending) {
+        return res.status(400).json({ error: "An active swap request already exists for this colleague and shift" });
+      }
+
       const swap = await prisma.swapRequest.create({
         data: {
           shiftId,
@@ -1495,16 +1551,17 @@ async function startServer() {
       // Send email to Target Colleague
       try {
         if (swap.target.user.email) {
+          const baseUrl = getPublicBaseUrl(req);
+          const acceptToken = generateEmailActionToken({ swapId: swap.id, targetUserId: swap.target.userId, response: "ACCEPT" });
+          const declineToken = generateEmailActionToken({ swapId: swap.id, targetUserId: swap.target.userId, response: "DECLINE" });
           await sendEmailNotification(
             swap.target.user.email,
-            `Denstruil voorstel van ${req.user.name}`,
+            `Ruilvoorstel: ${swap.shift.name} op ${swap.shift.date}`,
             `<h3>Beste ${swap.target.user.name},</h3>
-             <p>Uw collega <strong>${req.user.name}</strong> heeft voorgesteld om een shift met u te ruilen:</p>
-             <ul>
-               <li><strong>Hun Shift:</strong> ${swap.shift.name} op ${swap.shift.date} (${swap.shift.startTime} - ${swap.shift.endTime})</li>
-               <li><strong>Reden:</strong> ${reason}</li>
-             </ul>
-             <p>U kunt dit voorstel accepteren of weigeren op het Ruilbord in de app.</p>
+             <p>Uw collega <strong>${req.user.name}</strong> vraagt om de volgende shift te ruilen:</p>
+             ${buildSwapDetailsHtml({ ...swap, reason })}
+             <p><strong>Actie in de app:</strong> Als u akkoord gaat, klikt u op de knop hieronder. U kunt ook weigeren via de andere knop.</p>
+             ${buildSwapActionButtons(baseUrl, `/api/swaps/email-action?token=${encodeURIComponent(acceptToken)}`, `/api/swaps/email-action?token=${encodeURIComponent(declineToken)}`)}
              <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`
           );
         }
@@ -1569,9 +1626,10 @@ async function startServer() {
           const vertaaldResponse = response === "ACCEPT" ? "geaccepteerd" : "geweigerd";
           await sendEmailNotification(
             swap.requester.user.email,
-            `Collega reageerde op ruildienst voorstel`,
+            `Collega heeft gereageerd op uw ruilvoorstel`,
             `<h3>Beste ${swap.requester.user.name},</h3>
-             <p>Uw collega <strong>${req.user.name}</strong> heeft uw voorstel om diensten te ruilen voor <strong>${swap.shift.name} op ${swap.shift.date}</strong> <strong>${vertaaldResponse}</strong>.</p>
+             <p>Uw collega <strong>${req.user.name}</strong> heeft uw voorstel om de onderstaande shift te ruilen <strong>${vertaaldResponse}</strong>:</p>
+             ${buildSwapDetailsHtml(swap)}
              ${response === "ACCEPT" ? "<p>De aanvraag ligt nu bij de beheerder voor definitieve goedkeuring.</p>" : ""}
              <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`
           );
@@ -1595,11 +1653,17 @@ async function startServer() {
 
           // Send email to Admin
           try {
+            const baseUrl = getPublicBaseUrl(req);
+            const approveToken = generateAdminEmailActionToken({ swapId: swap.id, adminUserId: admin.id, response: "APPROVED_ADMIN" });
+            const rejectToken = generateAdminEmailActionToken({ swapId: swap.id, adminUserId: admin.id, response: "REJECTED_ADMIN" });
             await sendEmailNotification(
               admin.email,
               `Dienstruil gereed voor goedkeuring`,
               `<h3>Dienstruil wacht op goedkeuring</h3>
                <p>De ruildienst tussen <strong>${swap.requester.user.name}</strong> en <strong>${req.user.name}</strong> is onderling geaccepteerd en vereist uw goedkeuring als beheerder.</p>
+               ${buildSwapDetailsHtml(swap)}
+               <p><strong>Actie in de app:</strong> U kunt deze ruil direct goedkeuren of weigeren via onderstaande knoppen.</p>
+               ${buildSwapActionButtons(baseUrl, `/api/swaps/email-admin-action?token=${encodeURIComponent(approveToken)}`, `/api/swaps/email-admin-action?token=${encodeURIComponent(rejectToken)}`)}
                <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`
             );
           } catch (mailErr) {
@@ -1635,6 +1699,10 @@ async function startServer() {
       });
 
       if (!swap) return res.status(404).json({ error: "Swap request not found" });
+
+      if (status === "APPROVED_ADMIN" && swap.status !== "ACCEPTED_TARGET") {
+        return res.status(400).json({ error: "Swap can only be approved after the colleague has accepted it" });
+      }
 
       const updated = await prisma.swapRequest.update({
         where: { id },
@@ -1686,6 +1754,7 @@ async function startServer() {
         const vertaaldStatus = status === "APPROVED_ADMIN" ? "GOEDGEKEURD" : "GEWEIGERD";
         const emailBody = `<h3>Beste collega,</h3>
           <p>De ruildienst tussen <strong>${swap.requester.user.name}</strong> en <strong>${swap.target.user.name}</strong> is <strong>${vertaaldStatus}</strong> door beheerder ${req.user.name}.</p>
+          ${buildSwapDetailsHtml(swap)}
           <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`;
 
         if (swap.requester.user.email) {
@@ -1702,6 +1771,187 @@ async function startServer() {
       return res.json(updated);
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/swaps/email-action", async (req, res) => {
+    const token = String(req.query.token || "");
+    const payload = verifyEmailActionToken(token);
+
+    if (!payload) {
+      return res.status(400).send("Deze link is ongeldig of verlopen.");
+    }
+
+    try {
+      const swap = await prisma.swapRequest.findUnique({
+        where: { id: payload.swapId },
+        include: {
+          shift: true,
+          targetShift: true,
+          requester: { include: { user: true } },
+          target: { include: { user: true } },
+        },
+      });
+
+      if (!swap) {
+        return res.status(404).send("Ruilverzoek niet gevonden.");
+      }
+
+      if (swap.target.userId !== payload.targetUserId) {
+        return res.status(403).send("Deze link hoort niet bij uw account.");
+      }
+
+      if (payload.response === "ACCEPT") {
+        if (swap.status === "PENDING_TARGET") {
+          await prisma.swapRequest.update({ where: { id: swap.id }, data: { status: "ACCEPTED_TARGET" } });
+
+          await prisma.notification.create({
+            data: {
+              userId: swap.requester.userId,
+              title: "Colleague Responded to Swap",
+              message: `${swap.target.user.name} has ACCEPTED your swap proposal for ${swap.shift.name} on ${swap.shift.date} from the email link.`,
+              link: "/swaps",
+            },
+          });
+
+          try {
+            if (swap.requester.user.email) {
+              await sendEmailNotification(
+                swap.requester.user.email,
+                `Collega heeft uw ruilvoorstel geaccepteerd`,
+                `<h3>Beste ${swap.requester.user.name},</h3>
+                 <p>Uw collega <strong>${swap.target.user.name}</strong> heeft uw ruilvoorstel via de e-mail geaccepteerd.</p>
+                 ${buildSwapDetailsHtml(swap)}
+                 <p>De aanvraag ligt nu bij de beheerder voor definitieve goedkeuring.</p>
+                 <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`
+              );
+            }
+          } catch (mailErr) {
+            console.error("Failed to send requester email after email accept:", mailErr);
+          }
+
+          const admins = await prisma.user.findMany({ where: { role: "ADMINISTRATOR" } });
+          for (const admin of admins) {
+            await prisma.notification.create({
+              data: {
+                userId: admin.id,
+                title: "Swap Ready for Approval",
+                message: `Swap request between ${swap.requester.user.name} and ${swap.target.user.name} was accepted from the email link. Needs admin approval.`,
+                link: "/admin/swaps",
+              },
+            });
+          }
+        }
+
+        return res.send("Bedankt. De ruilaanvraag is geaccepteerd en wacht nu op beheerdergoedkeuring.");
+      }
+
+      if (payload.response === "DECLINE") {
+        if (swap.status === "PENDING_TARGET") {
+          await prisma.swapRequest.update({ where: { id: swap.id }, data: { status: "REJECTED_TARGET" } });
+
+          await prisma.notification.create({
+            data: {
+              userId: swap.requester.userId,
+              title: "Colleague Responded to Swap",
+              message: `${swap.target.user.name} has DECLINED your swap proposal for ${swap.shift.name} on ${swap.shift.date} from the email link.`,
+              link: "/swaps",
+            },
+          });
+
+          try {
+            if (swap.requester.user.email) {
+              await sendEmailNotification(
+                swap.requester.user.email,
+                `Collega heeft uw ruilvoorstel geweigerd`,
+                `<h3>Beste ${swap.requester.user.name},</h3>
+                 <p>Uw collega <strong>${swap.target.user.name}</strong> heeft uw ruilvoorstel via de e-mail geweigerd.</p>
+                 ${buildSwapDetailsHtml(swap)}
+                 <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`
+              );
+            }
+          } catch (mailErr) {
+            console.error("Failed to send requester email after email decline:", mailErr);
+          }
+        }
+        return res.send("De ruilaanvraag is geweigerd.");
+      }
+
+      return res.status(400).send("Ongeldige actie.");
+    } catch (error: any) {
+      return res.status(500).send(error.message);
+    }
+  });
+
+  app.get("/api/swaps/email-admin-action", async (req, res) => {
+    const token = String(req.query.token || "");
+    const payload = verifyAdminEmailActionToken(token);
+
+    if (!payload) {
+      return res.status(400).send("Deze link is ongeldig of verlopen.");
+    }
+
+    try {
+      const swap = await prisma.swapRequest.findUnique({
+        where: { id: payload.swapId },
+        include: {
+          shift: true,
+          targetShift: true,
+          requester: { include: { user: true } },
+          target: { include: { user: true } },
+        },
+      });
+
+      if (!swap) {
+        return res.status(404).send("Ruilverzoek niet gevonden.");
+      }
+
+      const admin = await prisma.user.findUnique({ where: { id: payload.adminUserId } });
+      if (!admin || admin.role !== "ADMINISTRATOR") {
+        return res.status(403).send("Deze link hoort niet bij een beheerder.");
+      }
+
+      if (payload.response === "APPROVED_ADMIN" && swap.status !== "ACCEPTED_TARGET") {
+        return res.status(400).send("Deze ruil kan pas worden goedgekeurd nadat de collega akkoord heeft gegeven.");
+      }
+
+      const updated = await prisma.swapRequest.update({
+        where: { id: swap.id },
+        data: { status: payload.response },
+      });
+
+      if (payload.response === "APPROVED_ADMIN") {
+        await prisma.shiftAssignment.deleteMany({ where: { shiftId: swap.shiftId, employeeId: swap.requesterId } });
+        await prisma.shiftAssignment.create({ data: { shiftId: swap.shiftId, employeeId: swap.targetId, status: "ASSIGNED" } });
+
+        if (swap.targetShiftId) {
+          await prisma.shiftAssignment.deleteMany({ where: { shiftId: swap.targetShiftId, employeeId: swap.targetId } });
+          await prisma.shiftAssignment.create({ data: { shiftId: swap.targetShiftId, employeeId: swap.requesterId, status: "ASSIGNED" } });
+        }
+      }
+
+      const responseLabel = payload.response === "APPROVED_ADMIN" ? "goedgekeurd" : "geweigerd";
+      await prisma.notification.create({
+        data: {
+          userId: swap.requester.userId,
+          title: `Swap Request ${payload.response === "APPROVED_ADMIN" ? "Approved" : "Rejected"}`,
+          message: `Uw ruilvoorstel is door beheerder ${admin.name} ${responseLabel}.`,
+          link: "/swaps",
+        },
+      });
+
+      await prisma.notification.create({
+        data: {
+          userId: swap.target.userId,
+          title: `Swap Request ${payload.response === "APPROVED_ADMIN" ? "Approved" : "Rejected"}`,
+          message: `De ruil met ${swap.requester.user.name} is door beheerder ${admin.name} ${responseLabel}.`,
+          link: "/swaps",
+        },
+      });
+
+      return res.send(payload.response === "APPROVED_ADMIN" ? "De ruil is goedgekeurd." : "De ruil is geweigerd.");
+    } catch (error: any) {
+      return res.status(500).send(error.message);
     }
   });
 
@@ -1786,6 +2036,7 @@ async function startServer() {
   app.get("/api/announcements", authenticate, async (req, res) => {
     try {
       const list = await prisma.announcement.findMany({
+        where: { isArchived: false },
         include: { author: { select: { name: true } } },
         orderBy: { createdAt: "desc" },
       });
@@ -1828,6 +2079,31 @@ async function startServer() {
     }
   });
 
+  app.put("/api/announcements/:id/archive", authenticate, requireAdmin, async (req: any, res) => {
+    const { id } = req.params;
+    try {
+      const updated = await prisma.announcement.update({
+        where: { id },
+        data: { isArchived: true },
+      });
+      await logAction(req.user.id, "ANNOUNCEMENT_ARCHIVE", `Archived announcement ${updated.title}`);
+      return res.json(updated);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/announcements/:id", authenticate, requireAdmin, async (req: any, res) => {
+    const { id } = req.params;
+    try {
+      await prisma.announcement.delete({ where: { id } });
+      await logAction(req.user.id, "ANNOUNCEMENT_DELETE", `Deleted announcement ${id}`);
+      return res.json({ success: true });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
   // ----------------------------------------------------
   // NOTIFICATIONS ENDPOINTS
   // ----------------------------------------------------
@@ -1835,7 +2111,7 @@ async function startServer() {
   app.get("/api/notifications", authenticate, async (req: any, res) => {
     try {
       const list = await prisma.notification.findMany({
-        where: { userId: req.user.id },
+        where: { userId: req.user.id, isArchived: false },
         orderBy: { createdAt: "desc" },
       });
       return res.json(list);
@@ -1852,6 +2128,31 @@ async function startServer() {
         data: { isRead: true },
       });
       return res.json({ success: true });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/notifications/:id/archive", authenticate, async (req: any, res) => {
+    const { id } = req.params;
+    try {
+      const updated = await prisma.notification.updateMany({
+        where: { id, userId: req.user.id },
+        data: { isArchived: true },
+      });
+      return res.json({ success: true, count: updated.count });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/notifications/:id", authenticate, async (req: any, res) => {
+    const { id } = req.params;
+    try {
+      const deleted = await prisma.notification.deleteMany({
+        where: { id, userId: req.user.id },
+      });
+      return res.json({ success: true, count: deleted.count });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
     }

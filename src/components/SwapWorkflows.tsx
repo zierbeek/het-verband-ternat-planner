@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { ArrowLeftRight, Check, X, ClipboardCheck, Plus, AlertCircle, Info, MessageSquare } from "lucide-react";
 import { SwapRequest, Shift, Employee, ShiftAssignment } from "../types.js";
+import { getUserColorStyle } from "../utils/userColor.ts";
 
 interface SwapWorkflowsProps {
   user: any;
@@ -175,7 +176,7 @@ export default function SwapWorkflows({ user, token }: SwapWorkflowsProps) {
             Dienstruilen & Ruilbord
           </h2>
           <p className="text-slate-500 text-xs mt-0.5">
-            Ruil geplande shifts met uw collega's van de verpleging. Alle ruilen moeten eerst door uw collega en ten slotte door een beheerder worden goedgekeurd.
+            Ruil geplande shifts met uw collega's van de verpleging. De andere medewerker moet eerst expliciet akkoord geven, en daarna volgt nog goedkeuring door een beheerder.
           </p>
         </div>
 
@@ -217,7 +218,12 @@ export default function SwapWorkflows({ user, token }: SwapWorkflowsProps) {
                     <div className="flex justify-between items-start gap-2">
                       <div className="space-y-0.5">
                         <p className="text-xs font-semibold text-slate-500">Voorgesteld door</p>
-                        <p className="text-sm font-bold text-slate-800">{swap.requester?.user?.name}</p>
+                        <p
+                          style={getUserColorStyle(swap.requesterId, 0.14)}
+                          className="text-sm font-bold text-slate-800 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border"
+                        >
+                          {swap.requester?.user?.name}
+                        </p>
                       </div>
                       {getStatusLabel(swap.status)}
                     </div>
@@ -323,6 +329,10 @@ export default function SwapWorkflows({ user, token }: SwapWorkflowsProps) {
             </h3>
             
             <form onSubmit={handleCreateSwap} className="space-y-3 text-sm text-slate-700">
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-500 leading-relaxed">
+                Een ruilaanvraag wordt pas verwerkt nadat de collega het voorstel heeft geaccepteerd.
+              </div>
+
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">1. Selecteer uw shift om weg te geven</label>
                 <select

@@ -5,7 +5,6 @@ import {
   Calendar,
   ClipboardList,
   ArrowLeftRight,
-  Clock,
   Settings,
   LogOut,
   Bell,
@@ -18,8 +17,8 @@ import Dashboard from "./components/Dashboard.tsx";
 import ShiftCalendar from "./components/ShiftCalendar.tsx";
 import LeaveManagement from "./components/LeaveManagement.tsx";
 import SwapWorkflows from "./components/SwapWorkflows.tsx";
-import AvailabilitySettings from "./components/AvailabilitySettings.tsx";
 import AdminPanel from "./components/AdminPanel.tsx";
+import { getUserColorStyle } from "./utils/userColor.ts";
 
 export default function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem("token"));
@@ -27,6 +26,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<string>("dashboard");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [adminOpenRequests, setAdminOpenRequests] = useState<number>(0);
 
   // Quick state synchronization
   const fetchCurrentUser = async (authToken: string) => {
@@ -55,6 +55,27 @@ export default function App() {
       setLoading(false);
     }
   }, [token]);
+
+  useEffect(() => {
+    const fetchAdminBadge = async () => {
+      if (!user || user.role !== "ADMINISTRATOR" || !token) return;
+
+      try {
+        const res = await fetch("/api/reports/summary", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          setAdminOpenRequests((data.pendingLeaveCount || 0) + (data.pendingSwapCount || 0));
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    };
+
+    fetchAdminBadge();
+  }, [user, token]);
 
   const handleLoginSuccess = (newToken: string, loggedInUser: any) => {
     localStorage.setItem("token", newToken);
@@ -92,11 +113,8 @@ export default function App() {
     { id: "calendar", label: "Dienstregeling", icon: Calendar },
     { id: "leave", label: "Verlofaanvragen", icon: ClipboardList },
     { id: "swaps", label: "Ruilbord", icon: ArrowLeftRight },
-    ...(user.role === "EMPLOYEE"
-      ? [{ id: "availability", label: "Beschikbaarheid", icon: Clock }]
-      : []),
     ...(user.role === "ADMINISTRATOR"
-      ? [{ id: "admin", label: "Beheercentrum", icon: Settings }]
+      ? [{ id: "admin", label: `Beheercentrum (${adminOpenRequests})`, icon: Settings }]
       : []),
   ];
 
@@ -133,7 +151,7 @@ export default function App() {
           </div>
 
           <div className="h-9 w-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 border border-slate-200/50">
-            <User className="h-5 w-5" />
+            <User className="h-5 w-5" style={getUserColorStyle(user.id, 0.25)} />
           </div>
 
           <button
@@ -217,7 +235,6 @@ export default function App() {
           {activeTab === "calendar" && <ShiftCalendar user={user} token={token} />}
           {activeTab === "leave" && <LeaveManagement user={user} token={token} />}
           {activeTab === "swaps" && <SwapWorkflows user={user} token={token} />}
-          {activeTab === "availability" && <AvailabilitySettings user={user} token={token} />}
           {activeTab === "admin" && <AdminPanel user={user} token={token} />}
         </main>
 

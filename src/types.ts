@@ -101,6 +101,7 @@ export interface Notification {
   title: string;
   message: string;
   isRead: boolean;
+  isArchived?: boolean;
   link?: string;
   createdAt: string;
 }
@@ -110,6 +111,7 @@ export interface Announcement {
   title: string;
   content: string;
   authorId: string;
+  isArchived?: boolean;
   createdAt: string;
   author?: {
     name: string;

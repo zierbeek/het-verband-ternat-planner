@@ -21,6 +21,7 @@ import {
   Edit
 } from "lucide-react";
 import { AuditLog, Announcement } from "../types.js";
+import { getUserColorStyle } from "../utils/userColor.ts";
 
 interface AdminPanelProps {
   user: any;
@@ -613,7 +614,11 @@ export default function AdminPanel({ user, token }: AdminPanelProps) {
                       {reportsData.employeeStats.map((stat: any) => {
                         return (
                           <tr key={stat.id} className="hover:bg-slate-50/50 transition">
-                            <td className="py-4 px-4 font-bold text-slate-800">{stat.name}</td>
+                            <td className="py-4 px-4 font-bold text-slate-800">
+                              <span style={getUserColorStyle(stat.id, 0.14)} className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border">
+                                {stat.name}
+                              </span>
+                            </td>
                             <td className="py-4 px-4 font-mono">{stat.email}</td>
                             <td className="py-4 px-4 text-center font-bold text-slate-900">{stat.assignedHours.toFixed(1)} uur</td>
                             <td className="py-4 px-4 text-center font-mono rounded-r-lg">{stat.assignmentCount} shifts</td>
@@ -815,7 +820,9 @@ export default function AdminPanel({ user, token }: AdminPanelProps) {
                     {employeesList.map((emp) => (
                       <tr key={emp.id} className="hover:bg-slate-50/50 transition">
                         <td className="py-4 px-4 font-bold text-slate-800">
-                          {emp.name}
+                          <span style={getUserColorStyle(emp.id, 0.14)} className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border">
+                            {emp.name}
+                          </span>
                           {emp.id === user.id && (
                             <span className="ml-1.5 bg-blue-50 text-blue-600 text-[9px] font-bold px-1.5 py-0.5 rounded">
                               U bent dit

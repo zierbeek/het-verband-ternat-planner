@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { Clock, Calendar, CheckSquare, Megaphone, Bell, BellOff, User, ClipboardList, TrendingUp } from "lucide-react";
+import { Clock, Calendar, CheckSquare, Megaphone, Bell, BellOff, User, ClipboardList, TrendingUp, Trash2, Archive } from "lucide-react";
 import { Shift, Announcement, Notification } from "../types.js";
+import { getUserColorStyle } from "../utils/userColor.ts";
 
 interface DashboardProps {
   user: any;
@@ -61,6 +62,66 @@ export default function Dashboard({ user, token }: DashboardProps) {
       setNotifications((prev) =>
         prev.map((n) => (n.id === notifId ? { ...n, isRead: true } : n))
       );
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleArchiveNotification = async (notifId: string) => {
+    try {
+      const res = await fetch(`/api/notifications/${notifId}/archive`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.ok) {
+        setNotifications((prev) => prev.filter((n) => n.id !== notifId));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDeleteNotification = async (notifId: string) => {
+    try {
+      const res = await fetch(`/api/notifications/${notifId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.ok) {
+        setNotifications((prev) => prev.filter((n) => n.id !== notifId));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleArchiveAnnouncement = async (announcementId: string) => {
+    try {
+      const res = await fetch(`/api/announcements/${announcementId}/archive`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.ok) {
+        setAnnouncements((prev) => prev.filter((ann) => ann.id !== announcementId));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDeleteAnnouncement = async (announcementId: string) => {
+    try {
+      const res = await fetch(`/api/announcements/${announcementId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.ok) {
+        setAnnouncements((prev) => prev.filter((ann) => ann.id !== announcementId));
+      }
     } catch (e) {
       console.error(e);
     }
@@ -149,7 +210,8 @@ export default function Dashboard({ user, token }: DashboardProps) {
                         shift.assignments.map((assign: any) => (
                           <span
                             key={assign.id}
-                            className="bg-blue-50 text-blue-700 text-[11px] font-semibold px-2 py-0.5 rounded-full border border-blue-100 flex items-center gap-1"
+                            style={getUserColorStyle(assign.employeeId, 0.14)}
+                            className="text-[11px] font-semibold px-2 py-0.5 rounded-full border flex items-center gap-1"
                           >
                             <User className="h-3 w-3" /> {assign.employee.user.name}
                           </span>
@@ -203,7 +265,8 @@ export default function Dashboard({ user, token }: DashboardProps) {
                         shift.assignments.map((assign: any) => (
                           <span
                             key={assign.id}
-                            className="bg-blue-50 text-blue-700 text-[11px] font-semibold px-2 py-0.5 rounded-full border border-blue-100 flex items-center gap-1"
+                            style={getUserColorStyle(assign.employeeId, 0.14)}
+                            className="text-[11px] font-semibold px-2 py-0.5 rounded-full border flex items-center gap-1"
                           >
                             <User className="h-3 w-3" /> {assign.employee.user.name}
                           </span>
@@ -234,12 +297,34 @@ export default function Dashboard({ user, token }: DashboardProps) {
             ) : (
               <div className="space-y-4">
                 {announcements.map((ann) => (
-                  <div key={ann.id} className="p-4 rounded-xl bg-amber-50/30 border border-amber-100">
-                    <h4 className="font-bold text-amber-900 text-sm">{ann.title}</h4>
-                    <p className="text-xs text-amber-800 mt-1 font-medium">
-                      Geplaatst door {ann.author?.name} op {new Date(ann.createdAt).toLocaleDateString("nl-BE")}
-                    </p>
-                    <p className="text-slate-600 text-sm mt-2 whitespace-pre-line leading-relaxed">
+                  <div key={ann.id} className="p-4 rounded-xl bg-amber-50/30 border border-amber-100 space-y-3">
+                    <div className="flex justify-between items-start gap-3">
+                      <div>
+                        <h4 className="font-bold text-amber-900 text-sm">{ann.title}</h4>
+                        <p className="text-xs text-amber-800 mt-1 font-medium">
+                          Geplaatst door {ann.author?.name} op {new Date(ann.createdAt).toLocaleDateString("nl-BE")}
+                        </p>
+                      </div>
+                      {user.role === "ADMINISTRATOR" && (
+                        <div className="flex gap-1.5 shrink-0">
+                          <button
+                            onClick={() => handleArchiveAnnouncement(ann.id)}
+                            className="p-1.5 rounded-lg border border-amber-200 text-amber-700 hover:bg-amber-100 transition"
+                            title="Archiveren"
+                          >
+                            <Archive className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteAnnouncement(ann.id)}
+                            className="p-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 transition"
+                            title="Verwijderen"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-slate-600 text-sm whitespace-pre-line leading-relaxed">
                       {ann.content}
                     </p>
                   </div>
@@ -283,18 +368,34 @@ export default function Dashboard({ user, token }: DashboardProps) {
                         : "bg-blue-50/30 border-blue-100"
                     }`}
                   >
-                    <div className="flex justify-between items-start">
+                    <div className="flex justify-between items-start gap-2">
                       <span className={`font-semibold text-xs ${notif.isRead ? "text-slate-700" : "text-blue-900"}`}>
                         {notif.title}
                       </span>
-                      {!notif.isRead && (
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {!notif.isRead && (
+                          <button
+                            onClick={() => handleMarkAsRead(notif.id)}
+                            className="text-[10px] text-blue-600 hover:text-blue-800 font-bold transition hover:underline cursor-pointer"
+                          >
+                            Gelezen
+                          </button>
+                        )}
                         <button
-                          onClick={() => handleMarkAsRead(notif.id)}
-                          className="text-[10px] text-blue-600 hover:text-blue-800 font-bold transition hover:underline cursor-pointer"
+                          onClick={() => handleArchiveNotification(notif.id)}
+                          className="p-1 rounded-md border border-slate-200 text-slate-500 hover:bg-slate-100 transition"
+                          title="Archiveren"
                         >
-                          Markeer als gelezen
+                          <Archive className="h-3 w-3" />
                         </button>
-                      )}
+                        <button
+                          onClick={() => handleDeleteNotification(notif.id)}
+                          className="p-1 rounded-md border border-rose-200 text-rose-600 hover:bg-rose-50 transition"
+                          title="Verwijderen"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
                     </div>
                     <p className="text-xs text-slate-600 leading-relaxed">{notif.message}</p>
                     <span className="text-[10px] text-slate-400 self-end">

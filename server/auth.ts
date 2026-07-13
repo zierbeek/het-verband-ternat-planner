@@ -39,3 +39,27 @@ export function verifyToken(token: string): { id: string; email: string; role: s
     return null;
   }
 }
+
+export function generateEmailActionToken(payload: { swapId: string; targetUserId: string; response: "ACCEPT" | "DECLINE" }): string {
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
+}
+
+export function verifyEmailActionToken(token: string): { swapId: string; targetUserId: string; response: "ACCEPT" | "DECLINE" } | null {
+  try {
+    return jwt.verify(token, JWT_SECRET) as { swapId: string; targetUserId: string; response: "ACCEPT" | "DECLINE" };
+  } catch (error) {
+    return null;
+  }
+}
+
+export function generateAdminEmailActionToken(payload: { swapId: string; adminUserId: string; response: "APPROVED_ADMIN" | "REJECTED_ADMIN" }): string {
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
+}
+
+export function verifyAdminEmailActionToken(token: string): { swapId: string; adminUserId: string; response: "APPROVED_ADMIN" | "REJECTED_ADMIN" } | null {
+  try {
+    return jwt.verify(token, JWT_SECRET) as { swapId: string; adminUserId: string; response: "APPROVED_ADMIN" | "REJECTED_ADMIN" };
+  } catch (error) {
+    return null;
+  }
+}
