@@ -450,6 +450,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
   const getLeavesForDate = (date: Date) => {
     const dateStr = date.toISOString().split("T")[0];
     return leaveRequests.filter((leave) => {
+      if (leave.status === "CANCELLED") return false;
       return dateStr >= leave.startDate && dateStr <= leave.endDate;
     });
   };

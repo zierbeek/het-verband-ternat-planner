@@ -56,7 +56,7 @@ export interface LeaveRequest {
   type: "VACATION" | "SICK_LEAVE" | "TRAINING" | "PERSONAL";
   startDate: string;
   endDate: string;
-  status: "PENDING" | "APPROVED" | "REJECTED";
+  status: "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
   reason: string;
   comment?: string;
   approvalHistory?: string;

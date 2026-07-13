@@ -1395,6 +1395,97 @@ async function startServer() {
     }
   });
 
+  app.post("/api/leave-requests/:id/cancel", authenticate, async (req: any, res) => {
+    const { id } = req.params;
+
+    try {
+      const leave = await prisma.leaveRequest.findUnique({
+        where: { id },
+        include: { employee: true },
+      });
+      if (!leave) return res.status(404).json({ error: "Leave request not found" });
+
+      const isOwner = leave.employee.userId === req.user.id;
+      const isAdmin = req.user.role === "ADMINISTRATOR";
+      if (!isOwner && !isAdmin) {
+        return res.status(403).json({ error: "U kunt enkel uw eigen verlofaanvragen annuleren" });
+      }
+
+      if (leave.status === "CANCELLED") {
+        return res.status(400).json({ error: "Deze verlofaanvraag is al geannuleerd" });
+      }
+      if (leave.status === "REJECTED") {
+        return res.status(400).json({ error: "Een geweigerde verlofaanvraag kan niet geannuleerd worden" });
+      }
+
+      let existingHistory: any[] = [];
+      try {
+        existingHistory = JSON.parse(leave.approvalHistory || "[]");
+      } catch {
+        existingHistory = [];
+      }
+
+      const updated = await prisma.leaveRequest.update({
+        where: { id },
+        data: {
+          status: "CANCELLED",
+          approvalHistory: JSON.stringify([
+            ...existingHistory,
+            { action: "CANCELLED", actor: req.user.name, date: new Date().toISOString() },
+          ]),
+        },
+      });
+
+      // Notify the other party
+      if (isOwner) {
+        // Employee cancelled their own request -> notify administrators
+        const admins = await prisma.user.findMany({ where: { role: "ADMINISTRATOR" } });
+        for (const admin of admins) {
+          await prisma.notification.create({
+            data: {
+              userId: admin.id,
+              title: "Verlofaanvraag geannuleerd",
+              message: `${req.user.name} heeft de verlofaanvraag van ${leave.startDate} tot ${leave.endDate} geannuleerd.`,
+              link: "/admin/leave",
+            },
+          });
+        }
+      } else {
+        // Admin cancelled the employee's request -> notify the employee
+        await prisma.notification.create({
+          data: {
+            userId: leave.employee.userId,
+            title: "Verlofaanvraag geannuleerd",
+            message: `Uw verlofaanvraag van ${leave.startDate} tot ${leave.endDate} is geannuleerd door ${req.user.name}.`,
+            link: "/schedule",
+          },
+        });
+
+        // Send email to Employee
+        try {
+          const empUser = await prisma.user.findUnique({ where: { id: leave.employee.userId } });
+          if (empUser && empUser.email) {
+            await sendEmailNotification(
+              empUser.email,
+              "Verlofaanvraag geannuleerd - Het Verband Ternat",
+              `<h3>Beste ${empUser.name},</h3>
+               <p>Uw verlofaanvraag voor de periode <strong>${leave.startDate} tot ${leave.endDate}</strong> is geannuleerd door ${req.user.name}.</p>
+               <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`,
+              { platformUrl: getPublicBaseUrl(req), ctaLabel: "Bekijk uw planning" }
+            );
+          }
+        } catch (mailErr) {
+          console.error("Failed to send leave cancel mail:", mailErr);
+        }
+      }
+
+      await logAction(req.user.id, "LEAVE_CANCEL", `Cancelled leave request ${id}`);
+      return res.json(updated);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
   // ----------------------------------------------------
   // CHANGE REQUESTS ENDPOINTS
   // ----------------------------------------------------

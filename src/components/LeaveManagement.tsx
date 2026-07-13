@@ -105,12 +105,43 @@ export default function LeaveManagement({ user, token }: LeaveManagementProps) {
     }
   };
 
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+
+  const handleCancelRequest = async (leaveId: string) => {
+    if (!window.confirm("Weet u zeker dat u deze verlofaanvraag wilt annuleren?")) {
+      return;
+    }
+    setCancellingId(leaveId);
+    try {
+      const res = await fetch(`/api/leave-requests/${leaveId}/cancel`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (res.ok) {
+        fetchLeaves();
+      } else {
+        const err = await res.json();
+        alert(err.error || "Fout bij het annuleren van de verlofaanvraag");
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setCancellingId(null);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "APPROVED":
         return <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold px-3 py-1 rounded-full">Goedgekeurd</span>;
       case "REJECTED":
         return <span className="bg-red-50 text-red-700 border border-red-200 text-xs font-bold px-3 py-1 rounded-full">Geweigerd</span>;
+      case "CANCELLED":
+        return <span className="bg-slate-100 text-slate-500 border border-slate-200 text-xs font-bold px-3 py-1 rounded-full">Geannuleerd</span>;
       default:
         return <span className="bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold px-3 py-1 rounded-full animate-pulse">Wacht op goedkeuring</span>;
     }
@@ -213,6 +244,34 @@ export default function LeaveManagement({ user, token }: LeaveManagementProps) {
                     </div>
                   )}
                 </div>
+
+                {/* Cancel trigger for the requesting employee */}
+                {user.role === "EMPLOYEE" &&
+                  leave.employeeId === user.employee?.id &&
+                  (leave.status === "PENDING" || leave.status === "APPROVED") && (
+                    <div className="border-t border-slate-200 pt-3">
+                      <button
+                        onClick={() => handleCancelRequest(leave.id)}
+                        disabled={cancellingId === leave.id}
+                        className="w-full flex justify-center items-center gap-1.5 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-bold rounded-lg transition cursor-pointer disabled:opacity-50"
+                      >
+                        <X className="h-3.5 w-3.5" /> {cancellingId === leave.id ? "Bezig met annuleren..." : "Aanvraag Annuleren"}
+                      </button>
+                    </div>
+                  )}
+
+                {/* Cancel trigger for Admin (on already approved leaves) */}
+                {user.role === "ADMINISTRATOR" && leave.status === "APPROVED" && (
+                  <div className="border-t border-slate-200 pt-3">
+                    <button
+                      onClick={() => handleCancelRequest(leave.id)}
+                      disabled={cancellingId === leave.id}
+                      className="w-full flex justify-center items-center gap-1.5 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-bold rounded-lg transition cursor-pointer disabled:opacity-50"
+                    >
+                      <X className="h-3.5 w-3.5" /> {cancellingId === leave.id ? "Bezig met annuleren..." : "Goedkeuring Intrekken"}
+                    </button>
+                  </div>
+                )}
 
                 {/* Approve/Reject triggers for Admin */}
                 {user.role === "ADMINISTRATOR" && leave.status === "PENDING" && (
