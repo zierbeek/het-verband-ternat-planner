@@ -246,6 +246,73 @@ async function startServer() {
   };
 
   // ----------------------------------------------------
+  // DOUBLE-BOOKING PREVENTION
+  // A given employee may not hold two overlapping shift assignments at the
+  // same time. These helpers compute real overlap (correctly handling
+  // overnight shifts that cross midnight) and look up any conflicting
+  // assignment for a candidate shift before it is created.
+  // ----------------------------------------------------
+
+  type ShiftTimeRange = { date: string; startTime: string; endTime: string };
+
+  const shiftToRange = (s: ShiftTimeRange): { start: Date; end: Date } => {
+    const [y, mo, d] = s.date.split("-").map(Number);
+    const [sh, sm] = (s.startTime || "00:00").split(":").map(Number);
+    const [eh, em] = (s.endTime || "00:00").split(":").map(Number);
+    const start = new Date(y, (mo || 1) - 1, d || 1, sh || 0, sm || 0, 0);
+    const end = new Date(y, (mo || 1) - 1, d || 1, eh || 0, em || 0, 0);
+    if (end <= start) end.setDate(end.getDate() + 1); // shift crosses midnight
+    return { start, end };
+  };
+
+  const shiftsOverlap = (a: ShiftTimeRange, b: ShiftTimeRange): boolean => {
+    const ra = shiftToRange(a);
+    const rb = shiftToRange(b);
+    return ra.start < rb.end && rb.start < ra.end;
+  };
+
+  const dateStr = (d: Date): string => d.toISOString().split("T")[0];
+
+  // Returns the conflicting shift (if any) that `employeeId` is already
+  // assigned to and that overlaps with `candidate`. Pass `excludeShiftIds`
+  // to ignore specific shifts (e.g. the shift currently being edited, or
+  // shifts already being vacated as part of the same swap operation).
+  const findBookingConflict = async (
+    employeeId: string,
+    candidate: ShiftTimeRange,
+    excludeShiftIds: string[] = []
+  ) => {
+    const [y, mo, d] = candidate.date.split("-").map(Number);
+    const prevDate = new Date(y, (mo || 1) - 1, (d || 1) - 1);
+    const nextDate = new Date(y, (mo || 1) - 1, (d || 1) + 1);
+
+    const existingAssignments = await prisma.shiftAssignment.findMany({
+      where: {
+        employeeId,
+        status: "ASSIGNED",
+        shift: {
+          date: { gte: dateStr(prevDate), lte: dateStr(nextDate) },
+          ...(excludeShiftIds.length ? { id: { notIn: excludeShiftIds } } : {}),
+        },
+      },
+      include: { shift: true },
+    });
+
+    for (const a of existingAssignments) {
+      if (shiftsOverlap(candidate, a.shift)) {
+        return a.shift;
+      }
+    }
+    return null;
+  };
+
+  const describeConflict = (conflict: { name: string; date: string; startTime: string; endTime: string }) =>
+    `al ingepland voor "${conflict.name}" op ${conflict.date} van ${conflict.startTime} tot ${conflict.endTime} en kan niet dubbel geboekt worden voor hetzelfde tijdslot`;
+
+  const conflictMessage = (conflict: { name: string; date: string; startTime: string; endTime: string }) =>
+    `Deze medewerker is ${describeConflict(conflict)}.`;
+
+  // ----------------------------------------------------
   // AUTHENTICATION ENDPOINTS
   // ----------------------------------------------------
 
@@ -662,6 +729,13 @@ async function startServer() {
     }
 
     try {
+      if (employeeId) {
+        const conflict = await findBookingConflict(employeeId, { date, startTime, endTime });
+        if (conflict) {
+          return res.status(409).json({ error: conflictMessage(conflict) });
+        }
+      }
+
       const shift = await prisma.shift.create({
         data: {
           name,
@@ -728,6 +802,21 @@ async function startServer() {
       });
       if (!shift) {
         return res.status(404).json({ error: "Shift not found" });
+      }
+
+      const effectiveDate = date || shift.date;
+      const effectiveStart = startTime || shift.startTime;
+      const effectiveEnd = endTime || shift.endTime;
+
+      if (employeeId) {
+        const conflict = await findBookingConflict(
+          employeeId,
+          { date: effectiveDate, startTime: effectiveStart, endTime: effectiveEnd },
+          [id]
+        );
+        if (conflict) {
+          return res.status(409).json({ error: conflictMessage(conflict) });
+        }
       }
 
       const updated = await prisma.shift.update({
@@ -848,6 +937,7 @@ async function startServer() {
 
       const dayDifference = Math.round((targetDate.getTime() - sourceDate.getTime()) / (1000 * 60 * 60 * 24));
       let totalCreated = 0;
+      let skippedConflicts = 0;
 
       for (const s of shifts) {
         const currentShiftDate = new Date(s.date);
@@ -871,6 +961,15 @@ async function startServer() {
         // Copy assignments optionally
         if (copyEmployees !== false) {
           for (const assign of s.assignments) {
+            const conflict = await findBookingConflict(assign.employeeId, {
+              date: newDateStr,
+              startTime: s.startTime,
+              endTime: s.endTime,
+            });
+            if (conflict) {
+              skippedConflicts++;
+              continue;
+            }
             await prisma.shiftAssignment.create({
               data: {
                 shiftId: newShift.id,
@@ -883,7 +982,7 @@ async function startServer() {
       }
 
       await logAction(req.user.id, "SHIFT_COPY_WEEK", `Copied week ${sourceStartDate} to ${targetStartDate} (with employees: ${copyEmployees !== false})`);
-      return res.json({ success: true, count: totalCreated });
+      return res.json({ success: true, count: totalCreated, skippedConflicts });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
     }
@@ -916,6 +1015,7 @@ async function startServer() {
       });
 
       let totalCreated = 0;
+      let skippedConflicts = 0;
 
       for (let i = 1; i <= weeks; i++) {
         const dayDifference = i * 7;
@@ -940,6 +1040,15 @@ async function startServer() {
 
           if (copyEmployees) {
             for (const assign of s.assignments) {
+              const conflict = await findBookingConflict(assign.employeeId, {
+                date: newDateStr,
+                startTime: s.startTime,
+                endTime: s.endTime,
+              });
+              if (conflict) {
+                skippedConflicts++;
+                continue;
+              }
               await prisma.shiftAssignment.create({
                 data: {
                   shiftId: newShift.id,
@@ -953,7 +1062,7 @@ async function startServer() {
       }
 
       await logAction(req.user.id, "SHIFT_REPEAT_WEEK", `Repeated week ${sourceStartDate} for ${weeks} weeks into the future (Copy employees: ${copyEmployees})`);
-      return res.json({ success: true, count: totalCreated });
+      return res.json({ success: true, count: totalCreated, skippedConflicts });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
     }
@@ -984,6 +1093,7 @@ async function startServer() {
       });
 
       let totalCreated = 0;
+      let skippedConflicts = 0;
 
       const getOccurrencesInMonth = (year: number, monthIdx: number) => {
         const occurrences: { [key: string]: Date[] } = {
@@ -1028,6 +1138,15 @@ async function startServer() {
 
         if (copyEmployees) {
           for (const assign of s.assignments) {
+            const conflict = await findBookingConflict(assign.employeeId, {
+              date: newDateStr,
+              startTime: s.startTime,
+              endTime: s.endTime,
+            });
+            if (conflict) {
+              skippedConflicts++;
+              continue;
+            }
             await prisma.shiftAssignment.create({
               data: {
                 shiftId: newShift.id,
@@ -1040,7 +1159,7 @@ async function startServer() {
       }
 
       await logAction(req.user.id, "SHIFT_COPY_MONTH", `Copied month ${sourceYearMonth} to ${targetYearMonth} (with employees: ${copyEmployees})`);
-      return res.json({ success: true, count: totalCreated });
+      return res.json({ success: true, count: totalCreated, skippedConflicts });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
     }
@@ -1246,6 +1365,87 @@ async function startServer() {
 
       await logAction(req.user.id, "SHIFT_SEND_MONTHLY_EMAIL", `Sent monthly schedule emails for ${yearMonth} to ${emailsSentCount} recipients`);
       return res.json({ success: true, count: emailsSentCount });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ----------------------------------------------------
+  // SHIFT PRESETS ENDPOINTS
+  // Admin-configurable quick-planning slots (replaces the old hardcoded
+  // "Voormiddag"/"Namiddag" list). Any authenticated user can read them
+  // (needed to render the planning UI); only admins can manage them.
+  // ----------------------------------------------------
+
+  app.get("/api/shift-presets", authenticate, async (req, res) => {
+    try {
+      const presets = await prisma.shiftPreset.findMany({
+        orderBy: { order: "asc" },
+      });
+      return res.json(presets);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/shift-presets", authenticate, requireAdmin, async (req: any, res) => {
+    const { label, startTime, endTime, color } = req.body;
+    if (!label || !startTime || !endTime) {
+      return res.status(400).json({ error: "Naam, starttijd en eindtijd zijn verplicht." });
+    }
+
+    try {
+      const highest = await prisma.shiftPreset.findFirst({ orderBy: { order: "desc" } });
+      const preset = await prisma.shiftPreset.create({
+        data: {
+          label,
+          startTime,
+          endTime,
+          color: color || "#10b981",
+          order: highest ? highest.order + 1 : 0,
+        },
+      });
+      await logAction(req.user.id, "SHIFT_PRESET_CREATE", `Created shift preset: ${label} (${startTime}-${endTime})`);
+      return res.status(201).json(preset);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/shift-presets/:id", authenticate, requireAdmin, async (req: any, res) => {
+    const { id } = req.params;
+    const { label, startTime, endTime, color, order } = req.body;
+
+    try {
+      const existing = await prisma.shiftPreset.findUnique({ where: { id } });
+      if (!existing) return res.status(404).json({ error: "Preset not found" });
+
+      const updated = await prisma.shiftPreset.update({
+        where: { id },
+        data: {
+          label: label !== undefined ? label : existing.label,
+          startTime: startTime !== undefined ? startTime : existing.startTime,
+          endTime: endTime !== undefined ? endTime : existing.endTime,
+          color: color !== undefined ? color : existing.color,
+          order: order !== undefined ? Number(order) : existing.order,
+        },
+      });
+      await logAction(req.user.id, "SHIFT_PRESET_UPDATE", `Updated shift preset ${id}`, existing, updated);
+      return res.json(updated);
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/shift-presets/:id", authenticate, requireAdmin, async (req: any, res) => {
+    const { id } = req.params;
+    try {
+      const existing = await prisma.shiftPreset.findUnique({ where: { id } });
+      if (!existing) return res.status(404).json({ error: "Preset not found" });
+
+      await prisma.shiftPreset.delete({ where: { id } });
+      await logAction(req.user.id, "SHIFT_PRESET_DELETE", `Deleted shift preset: ${existing.label}`);
+      return res.json({ success: true });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
     }
@@ -1669,6 +1869,23 @@ async function startServer() {
 
       if (!reqDetails) return res.status(404).json({ error: "Request not found" });
 
+      // If approving a time change, make sure the new time doesn't create a
+      // double-booking against another shift this employee already has.
+      if (status === "APPROVED" && reqDetails.type === "TIME_CHANGE" && reqDetails.requestedStartTime && reqDetails.requestedEndTime) {
+        const conflict = await findBookingConflict(
+          reqDetails.employeeId,
+          {
+            date: reqDetails.assignment.shift.date,
+            startTime: reqDetails.requestedStartTime,
+            endTime: reqDetails.requestedEndTime,
+          },
+          [reqDetails.assignment.shiftId]
+        );
+        if (conflict) {
+          return res.status(409).json({ error: conflictMessage(conflict) });
+        }
+      }
+
       const updated = await prisma.shiftChangeRequest.update({
         where: { id },
         data: {
@@ -1993,6 +2210,29 @@ async function startServer() {
         return res.status(400).json({ error: "Swap can only be approved after the colleague has accepted it" });
       }
 
+      if (status === "APPROVED_ADMIN") {
+        // Check both parties for conflicts BEFORE making any changes, excluding
+        // the shifts involved in this swap itself (they're being vacated as
+        // part of this very operation, so they shouldn't count as a conflict).
+        const involvedShiftIds = [swap.shiftId, ...(swap.targetShiftId ? [swap.targetShiftId] : [])];
+
+        const targetConflict = await findBookingConflict(swap.targetId, swap.shift, involvedShiftIds);
+        if (targetConflict) {
+          return res.status(409).json({
+            error: `Ruil kan niet worden goedgekeurd: ${swap.target.user.name} is ${describeConflict(targetConflict)}.`,
+          });
+        }
+
+        if (swap.targetShiftId && swap.targetShift) {
+          const requesterConflict = await findBookingConflict(swap.requesterId, swap.targetShift, involvedShiftIds);
+          if (requesterConflict) {
+            return res.status(409).json({
+              error: `Ruil kan niet worden goedgekeurd: ${swap.requester.user.name} is ${describeConflict(requesterConflict)}.`,
+            });
+          }
+        }
+      }
+
       const updated = await prisma.swapRequest.update({
         where: { id },
         data: { status },
@@ -2210,6 +2450,26 @@ async function startServer() {
 
       if (payload.response === "APPROVED_ADMIN" && swap.status !== "ACCEPTED_TARGET") {
         return res.status(400).send("Deze ruil kan pas worden goedgekeurd nadat de collega akkoord heeft gegeven.");
+      }
+
+      if (payload.response === "APPROVED_ADMIN") {
+        const involvedShiftIds = [swap.shiftId, ...(swap.targetShiftId ? [swap.targetShiftId] : [])];
+
+        const targetConflict = await findBookingConflict(swap.targetId, swap.shift, involvedShiftIds);
+        if (targetConflict) {
+          return res.status(409).send(
+            `Ruil kan niet worden goedgekeurd: ${swap.target.user.name} is ${describeConflict(targetConflict)}.`
+          );
+        }
+
+        if (swap.targetShiftId && swap.targetShift) {
+          const requesterConflict = await findBookingConflict(swap.requesterId, swap.targetShift, involvedShiftIds);
+          if (requesterConflict) {
+            return res.status(409).send(
+              `Ruil kan niet worden goedgekeurd: ${swap.requester.user.name} is ${describeConflict(requesterConflict)}.`
+            );
+          }
+        }
       }
 
       const updated = await prisma.swapRequest.update({

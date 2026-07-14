@@ -1,7 +1,28 @@
 import { prisma } from "./db.js";
 import { hashPassword } from "./auth.js";
 
+// Default quick-planning presets. Seeded once so the planning UI has
+// something to show out of the box; administrators can rename, retime,
+// recolor, reorder, delete, or add extras from that point on.
+async function seedDefaultShiftPresets() {
+  const presetCount = await prisma.shiftPreset.count();
+  if (presetCount > 0) return;
+
+  await prisma.shiftPreset.createMany({
+    data: [
+      { label: "Voormiddag", startTime: "07:00", endTime: "15:00", color: "#10b981", order: 0 },
+      { label: "Namiddag", startTime: "15:00", endTime: "23:00", color: "#f59e0b", order: 1 },
+    ],
+  });
+  console.log("Seeded default shift presets.");
+}
+
 export async function seedDatabase() {
+  // Runs independently of the admin-account check below so that existing
+  // installations upgrading to this feature also get sensible defaults,
+  // instead of starting with an empty presets list.
+  await seedDefaultShiftPresets();
+
   const userCount = await prisma.user.count();
   if (userCount > 0) {
     console.log("Database already seeded.");

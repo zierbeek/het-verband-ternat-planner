@@ -30,6 +30,15 @@ export interface Shift {
   assignments?: ShiftAssignment[];
 }
 
+export interface ShiftPreset {
+  id: string;
+  label: string;
+  startTime: string;
+  endTime: string;
+  color: string;
+  order: number;
+}
+
 export interface ShiftAssignment {
   id: string;
   shiftId: string;

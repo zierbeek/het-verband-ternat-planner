@@ -11,8 +11,11 @@ import {
   Copy,
   Printer,
   ChevronDown,
+  Pencil,
+  Trash2,
+  X,
 } from "lucide-react";
-import { Shift, Employee } from "../types.js";
+import { Shift, Employee, ShiftPreset } from "../types.js";
 import { getUserColorStyle } from "../utils/userColor.ts";
 
 interface ShiftCalendarProps {
@@ -23,12 +26,16 @@ interface ShiftCalendarProps {
 type PlannerSlot = "morning" | "afternoon";
 
 type PlannerDragItem =
-  | { type: "template"; slot: PlannerSlot }
+  | { type: "template"; presetId: string }
   | { type: "shift"; shiftId: string };
 
-const SLOT_CONFIG: Record<PlannerSlot, { label: string; startTime: string; endTime: string; color: string }> = {
-  morning: { label: "Voormiddag", startTime: "07:00", endTime: "15:00", color: "#10b981" },
-  afternoon: { label: "Namiddag", startTime: "15:00", endTime: "23:00", color: "#f59e0b" },
+// Fallback used only until presets have loaded from the server, or if fewer
+// than two presets exist. The first two presets (by `order`) define the
+// two quick-planning columns; administrators can rename/retime/recolor them
+// (and add further presets) via the "Presets beheren" panel.
+const FALLBACK_SLOT_PRESETS: Record<PlannerSlot, ShiftPreset> = {
+  morning: { id: "fallback-morning", label: "Voormiddag", startTime: "07:00", endTime: "15:00", color: "#10b981", order: 0 },
+  afternoon: { id: "fallback-afternoon", label: "Namiddag", startTime: "15:00", endTime: "23:00", color: "#f59e0b", order: 1 },
 };
 
 const parseTimeToMinutes = (time: string) => {
@@ -54,6 +61,7 @@ const getEmployeeBadgeStyle = (employeeId?: string) => getUserColorStyle(employe
 export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [presets, setPresets] = useState<ShiftPreset[]>([]);
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [viewType, setViewType] = useState<"month" | "week" | "day">("week");
   const [selectedEmployeeFilter, setSelectedEmployeeFilter] = useState<string>("all");
@@ -63,6 +71,15 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
+
+  // Preset management modal state
+  const [isPresetsModalOpen, setIsPresetsModalOpen] = useState(false);
+  const [newPresetLabel, setNewPresetLabel] = useState("");
+  const [newPresetStart, setNewPresetStart] = useState("06:00");
+  const [newPresetEnd, setNewPresetEnd] = useState("14:00");
+  const [newPresetColor, setNewPresetColor] = useState("#6366f1");
+  const [editingPresetId, setEditingPresetId] = useState<string | null>(null);
+  const [editPresetDraft, setEditPresetDraft] = useState<{ label: string; startTime: string; endTime: string; color: string } | null>(null);
 
   // Form states for Create Shift
   const [shiftName, setShiftName] = useState("Voormiddag");
@@ -152,6 +169,20 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
     }
   };
 
+  const fetchPresets = async () => {
+    try {
+      const res = await fetch("/api/shift-presets", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPresets(data);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const fetchLeaveRequests = async () => {
     try {
       const res = await fetch("/api/leave-requests?all=true", {
@@ -169,8 +200,103 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
   useEffect(() => {
     fetchShifts();
     fetchEmployees();
+    fetchPresets();
     fetchLeaveRequests();
   }, [currentDate, selectedEmployeeFilter, token]);
+
+  // The first two presets (by `order`) drive the two quick-planning columns
+  // used throughout week/day view, falling back to sensible defaults until
+  // presets have loaded (or if an admin deletes down to fewer than two).
+  const sortedPresets = [...presets].sort((a, b) => a.order - b.order);
+  const slotPresets: Record<PlannerSlot, ShiftPreset> = {
+    morning: sortedPresets[0] || FALLBACK_SLOT_PRESETS.morning,
+    afternoon: sortedPresets[1] || FALLBACK_SLOT_PRESETS.afternoon,
+  };
+
+  const handleCreatePreset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPresetLabel || !newPresetStart || !newPresetEnd) return;
+    try {
+      const res = await fetch("/api/shift-presets", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          label: newPresetLabel,
+          startTime: newPresetStart,
+          endTime: newPresetEnd,
+          color: newPresetColor,
+        }),
+      });
+      if (res.ok) {
+        setNewPresetLabel("");
+        setNewPresetStart("06:00");
+        setNewPresetEnd("14:00");
+        setNewPresetColor("#6366f1");
+        fetchPresets();
+        showFeedback("Preset toegevoegd!");
+      } else {
+        const err = await res.json();
+        showFeedback(err.error || "Fout bij het toevoegen van de preset", "error");
+      }
+    } catch (e) {
+      console.error(e);
+      showFeedback("Fout bij het verbinden met de server", "error");
+    }
+  };
+
+  const startEditingPreset = (preset: ShiftPreset) => {
+    setEditingPresetId(preset.id);
+    setEditPresetDraft({ label: preset.label, startTime: preset.startTime, endTime: preset.endTime, color: preset.color });
+  };
+
+  const handleSavePreset = async (presetId: string) => {
+    if (!editPresetDraft) return;
+    try {
+      const res = await fetch(`/api/shift-presets/${presetId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(editPresetDraft),
+      });
+      if (res.ok) {
+        setEditingPresetId(null);
+        setEditPresetDraft(null);
+        fetchPresets();
+        showFeedback("Preset bijgewerkt!");
+      } else {
+        const err = await res.json();
+        showFeedback(err.error || "Fout bij het bijwerken van de preset", "error");
+      }
+    } catch (e) {
+      console.error(e);
+      showFeedback("Fout bij het verbinden met de server", "error");
+    }
+  };
+
+  const handleDeletePreset = async (presetId: string) => {
+    if (!window.confirm("Weet u zeker dat u deze preset wilt verwijderen?")) return;
+    try {
+      const res = await fetch(`/api/shift-presets/${presetId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        fetchPresets();
+        showFeedback("Preset verwijderd!");
+      } else {
+        const err = await res.json();
+        showFeedback(err.error || "Fout bij het verwijderen van de preset", "error");
+      }
+    } catch (e) {
+      console.error(e);
+      showFeedback("Fout bij het verbinden met de server", "error");
+    }
+  };
 
   const handleCreateShift = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -388,11 +514,17 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
   const handlePlannerDrop = async (date: Date, slot: PlannerSlot) => {
     if (!draggedItem || user.role !== "ADMINISTRATOR") return;
 
-    const slotConfig = SLOT_CONFIG[slot];
     const dateStr = date.toISOString().split("T")[0];
 
     try {
       if (draggedItem.type === "template") {
+        // Use the dragged preset's own name/time/color - it lands in the
+        // correct visual column automatically via getShiftSlot() below,
+        // regardless of which of the two columns it was physically dropped on.
+        const preset =
+          presets.find((p) => p.id === draggedItem.presetId) ||
+          slotPresets[slot];
+
         const res = await fetch("/api/shifts", {
           method: "POST",
           headers: {
@@ -400,23 +532,24 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            name: slotConfig.label,
-            startTime: slotConfig.startTime,
-            endTime: slotConfig.endTime,
+            name: preset.label,
+            startTime: preset.startTime,
+            endTime: preset.endTime,
             date: dateStr,
-            color: slotConfig.color,
+            color: preset.color,
             requiredEmployees: 1,
           }),
         });
 
         if (res.ok) {
-          showFeedback(`${slotConfig.label} gepland op ${dateStr}`);
+          showFeedback(`${preset.label} gepland op ${dateStr}`);
           fetchShifts();
         } else {
           const err = await res.json();
           showFeedback(err.error || "Fout bij het aanmaken van de shift", "error");
         }
       } else {
+        const slotConfig = slotPresets[slot];
         const res = await fetch(`/api/shifts/${draggedItem.shiftId}`, {
           method: "PUT",
           headers: {
@@ -653,26 +786,31 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                   <div>
                     <h3 className="text-sm font-bold tracking-tight">Snelle planning</h3>
                     <p className="text-xs text-slate-300 mt-0.5">
-                      Sleep een template naar een dagdeel, of versleep een bestaande shift naar een ander vak of een andere dag.
+                      Sleep een preset naar een dagdeel, of versleep een bestaande shift naar een ander vak of een andere dag.
                     </p>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {(Object.keys(SLOT_CONFIG) as PlannerSlot[]).map((slot) => {
-                      const config = SLOT_CONFIG[slot];
-                      return (
-                        <button
-                          key={slot}
-                          type="button"
-                          draggable
-                          onDragStart={() => setDraggedItem({ type: "template", slot })}
-                          onDragEnd={() => setDraggedItem(null)}
-                          className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-white/10 hover:bg-white/15 text-xs font-bold transition cursor-grab active:cursor-grabbing"
-                        >
-                          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: config.color }} />
-                          {config.label}
-                        </button>
-                      );
-                    })}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {sortedPresets.map((preset) => (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        draggable
+                        onDragStart={() => setDraggedItem({ type: "template", presetId: preset.id })}
+                        onDragEnd={() => setDraggedItem(null)}
+                        className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-white/10 hover:bg-white/15 text-xs font-bold transition cursor-grab active:cursor-grabbing"
+                        title={`${preset.startTime} - ${preset.endTime}`}
+                      >
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: preset.color }} />
+                        {preset.label}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setIsPresetsModalOpen(true)}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-dashed border-white/20 hover:bg-white/10 text-xs font-bold transition cursor-pointer text-slate-200"
+                    >
+                      <Settings className="h-3.5 w-3.5" /> Presets beheren
+                    </button>
                   </div>
                 </div>
               </div>
@@ -815,8 +953,8 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
 
             {user.role === "ADMINISTRATOR" && !isPrintMode && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5">
-                {(Object.keys(SLOT_CONFIG) as PlannerSlot[]).map((slot) => {
-                  const config = SLOT_CONFIG[slot];
+                {(Object.keys(slotPresets) as PlannerSlot[]).map((slot) => {
+                  const config = slotPresets[slot];
                   const slotKey = `${currentDate.toISOString().split("T")[0]}-${slot}`;
                   const slotShifts = getShiftsForDateAndSlot(currentDate, slot);
 
@@ -950,22 +1088,25 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                   onChange={(e) => {
                     const val = e.target.value;
                     setShiftName(val);
-                    if (val === "Voormiddag" || val === "Vroege Dienst" || val === "Morning Shift") {
-                      setStartTime("07:00");
-                      setEndTime("15:00");
-                      setShiftColor("#10b981");
-                    } else if (val === "Namiddag" || val === "Late Dienst" || val === "Afternoon Shift") {
-                      setStartTime("15:00");
-                      setEndTime("23:00");
-                      setShiftColor("#f59e0b");
+                    const matchedPreset = presets.find((p) => p.label === val);
+                    if (matchedPreset) {
+                      setStartTime(matchedPreset.startTime);
+                      setEndTime(matchedPreset.endTime);
+                      setShiftColor(matchedPreset.color);
                     }
                   }}
                   className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg font-medium"
                 >
-                  <option value="Voormiddag">Voormiddag (07:00 - 15:00)</option>
-                  <option value="Namiddag">Namiddag (15:00 - 23:00)</option>
+                  {sortedPresets.map((preset) => (
+                    <option key={preset.id} value={preset.label}>
+                      {preset.label} ({preset.startTime} - {preset.endTime})
+                    </option>
+                  ))}
                   <option value="Aangepaste Shift">Aangepaste Shift</option>
                 </select>
+                <p className="mt-1 text-[11px] text-slate-400">
+                  Beheer de beschikbare presets via "Presets beheren" boven de weekkalender.
+                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1297,6 +1438,164 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                   {copyMode === "week" ? "Week Kopiëren" : copyMode === "repeat" ? "Lange Termijn Herhalen" : "Maand Kopiëren"}
                 </button>
               </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MANAGE SHIFT PRESETS MODAL */}
+      {isPresetsModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex justify-center items-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-xl border border-slate-200 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-900">Presets Beheren</h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsPresetsModalOpen(false);
+                  setEditingPresetId(null);
+                  setEditPresetDraft(null);
+                }}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-500">
+              Deze presets verschijnen als sleepbare snelkeuzes bij "Snelle planning" en in de lijst van de "Nieuwe Shift"-modal.
+              De eerste twee (op volgorde) bepalen ook de twee kolommen in de week- en dagweergave.
+            </p>
+
+            <div className="space-y-2">
+              {sortedPresets.length === 0 && (
+                <p className="text-xs text-slate-400 italic">Nog geen presets. Voeg er hieronder een toe.</p>
+              )}
+              {sortedPresets.map((preset) => (
+                <div key={preset.id} className="border border-slate-200 rounded-xl p-3">
+                  {editingPresetId === preset.id && editPresetDraft ? (
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        value={editPresetDraft.label}
+                        onChange={(e) => setEditPresetDraft({ ...editPresetDraft, label: e.target.value })}
+                        className="block w-full px-3 py-1.5 border border-slate-300 rounded-lg text-sm font-medium"
+                        placeholder="Naam"
+                      />
+                      <div className="grid grid-cols-3 gap-2">
+                        <input
+                          type="text"
+                          value={editPresetDraft.startTime}
+                          onChange={(e) => setEditPresetDraft({ ...editPresetDraft, startTime: e.target.value })}
+                          className="px-2 py-1.5 border border-slate-300 rounded-lg text-xs font-mono text-center"
+                          placeholder="07:00"
+                        />
+                        <input
+                          type="text"
+                          value={editPresetDraft.endTime}
+                          onChange={(e) => setEditPresetDraft({ ...editPresetDraft, endTime: e.target.value })}
+                          className="px-2 py-1.5 border border-slate-300 rounded-lg text-xs font-mono text-center"
+                          placeholder="15:00"
+                        />
+                        <input
+                          type="color"
+                          value={editPresetDraft.color}
+                          onChange={(e) => setEditPresetDraft({ ...editPresetDraft, color: e.target.value })}
+                          className="h-8 w-full p-1 border border-slate-300 rounded-lg cursor-pointer"
+                        />
+                      </div>
+                      <div className="flex gap-2 justify-end">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingPresetId(null);
+                            setEditPresetDraft(null);
+                          }}
+                          className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 rounded-lg font-semibold text-slate-600 text-xs transition cursor-pointer"
+                        >
+                          Annuleren
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSavePreset(preset.id)}
+                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold text-white text-xs transition cursor-pointer"
+                        >
+                          Opslaan
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: preset.color }} />
+                        <div className="min-w-0">
+                          <p className="font-semibold text-slate-800 text-sm truncate">{preset.label}</p>
+                          <p className="text-[11px] text-slate-500 font-mono">{preset.startTime} - {preset.endTime}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => startEditingPreset(preset)}
+                          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition cursor-pointer"
+                          title="Naam/tijd/kleur wijzigen"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeletePreset(preset.id)}
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                          title="Preset verwijderen"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <form onSubmit={handleCreatePreset} className="border-t border-slate-200 pt-4 space-y-2">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">Nieuwe Preset Toevoegen</label>
+              <input
+                type="text"
+                required
+                value={newPresetLabel}
+                onChange={(e) => setNewPresetLabel(e.target.value)}
+                placeholder="Bijv. Nachtdienst"
+                className="block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+              />
+              <div className="grid grid-cols-3 gap-2">
+                <input
+                  type="text"
+                  required
+                  value={newPresetStart}
+                  onChange={(e) => setNewPresetStart(e.target.value)}
+                  placeholder="22:00"
+                  className="px-2 py-2 border border-slate-300 rounded-lg text-xs font-mono text-center"
+                />
+                <input
+                  type="text"
+                  required
+                  value={newPresetEnd}
+                  onChange={(e) => setNewPresetEnd(e.target.value)}
+                  placeholder="06:00"
+                  className="px-2 py-2 border border-slate-300 rounded-lg text-xs font-mono text-center"
+                />
+                <input
+                  type="color"
+                  value={newPresetColor}
+                  onChange={(e) => setNewPresetColor(e.target.value)}
+                  className="h-9 w-full p-1 border border-slate-300 rounded-lg cursor-pointer"
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold text-white text-sm transition shadow-xs cursor-pointer"
+              >
+                <Plus className="h-4 w-4" /> Preset Toevoegen
+              </button>
             </form>
           </div>
         </div>

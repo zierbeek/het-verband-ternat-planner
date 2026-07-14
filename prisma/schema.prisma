@@ -56,6 +56,21 @@ model Shift {
   targetSwaps       SwapRequest[]     @relation("TargetShift")
 }
 
+// Admin-configurable presets that populate the quick-planning slots in the
+// shift calendar (e.g. "Voormiddag 07:00-15:00"). Replaces the previously
+// hardcoded morning/afternoon-only list so administrators can rename presets
+// and add as many extra ones as they need (night shifts, weekend shifts...).
+model ShiftPreset {
+  id        String   @id @default(uuid())
+  label     String
+  startTime String   // "HH:MM"
+  endTime   String   // "HH:MM"
+  color     String   @default("#10b981")
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model ShiftAssignment {
   id         String               @id @default(uuid())
   shiftId    String
