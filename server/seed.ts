@@ -17,11 +17,38 @@ async function seedDefaultShiftPresets() {
   console.log("Seeded default shift presets.");
 }
 
+// Every user (administrator or employee) needs an Employee profile so they
+// can be assigned to shifts, request leave, etc. Older accounts created
+// before administrators became assignable may be missing this profile, so
+// this back-fills it on every startup. Safe to run repeatedly: it only
+// touches users that don't already have one.
+async function backfillEmployeeProfiles() {
+  const usersWithoutEmployee = await prisma.user.findMany({
+    where: { employee: null },
+    select: { id: true },
+  });
+
+  for (const user of usersWithoutEmployee) {
+    await prisma.employee.create({
+      data: {
+        userId: user.id,
+        preferredShifts: "[]",
+        preferredColleagues: "[]",
+      },
+    });
+  }
+
+  if (usersWithoutEmployee.length > 0) {
+    console.log(`Backfilled Employee profiles for ${usersWithoutEmployee.length} existing user(s).`);
+  }
+}
+
 export async function seedDatabase() {
   // Runs independently of the admin-account check below so that existing
   // installations upgrading to this feature also get sensible defaults,
   // instead of starting with an empty presets list.
   await seedDefaultShiftPresets();
+  await backfillEmployeeProfiles();
 
   const userCount = await prisma.user.count();
   if (userCount > 0) {
@@ -38,6 +65,16 @@ export async function seedDatabase() {
       passwordHash: hashPassword("admin123"),
       name: "Beheerder",
       role: "ADMINISTRATOR",
+    },
+  });
+
+  // Administrators also get an Employee profile so they can be assigned to
+  // shifts, request leave, etc. just like regular employees.
+  await prisma.employee.create({
+    data: {
+      userId: adminUser.id,
+      preferredShifts: "[]",
+      preferredColleagues: "[]",
     },
   });
 

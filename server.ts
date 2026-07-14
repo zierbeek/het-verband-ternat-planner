@@ -338,17 +338,15 @@ async function startServer() {
         },
       });
 
-      // If they are an employee, create the Employee profile
-      let employee = null;
-      if (user.role === "EMPLOYEE") {
-        employee = await prisma.employee.create({
-          data: {
-            userId: user.id,
-            preferredShifts: "[]",
-            preferredColleagues: "[]",
-          },
-        });
-      }
+      // Every user gets an Employee profile, regardless of role, so that
+      // administrators can also be assigned to shifts (not just employees).
+      const employee = await prisma.employee.create({
+        data: {
+          userId: user.id,
+          preferredShifts: "[]",
+          preferredColleagues: "[]",
+        },
+      });
 
       await logAction(user.id, "USER_REGISTER", `User registered as ${user.role}`);
 
@@ -1559,6 +1557,15 @@ async function startServer() {
       });
       if (!leave) return res.status(404).json({ error: "Leave request not found" });
 
+      // Only one administrator needs to approve a leave request. If another
+      // administrator already resolved it (approved, rejected or cancelled),
+      // don't let a second approval silently overwrite that decision.
+      if (leave.status !== "PENDING") {
+        return res.status(409).json({
+          error: `Deze verlofaanvraag is al ${leave.status === "APPROVED" ? "goedgekeurd" : leave.status === "REJECTED" ? "geweigerd" : "verwerkt"} door een andere beheerder.`,
+        });
+      }
+
       const updated = await prisma.leaveRequest.update({
         where: { id },
         data: {
@@ -1615,6 +1622,14 @@ async function startServer() {
         include: { employee: true },
       });
       if (!leave) return res.status(404).json({ error: "Leave request not found" });
+
+      // Only one administrator needs to decide on a leave request. If another
+      // administrator already resolved it, don't silently overwrite that.
+      if (leave.status !== "PENDING") {
+        return res.status(409).json({
+          error: `Deze verlofaanvraag is al ${leave.status === "APPROVED" ? "goedgekeurd" : leave.status === "REJECTED" ? "geweigerd" : "verwerkt"} door een andere beheerder.`,
+        });
+      }
 
       const updated = await prisma.leaveRequest.update({
         where: { id },
@@ -2206,6 +2221,15 @@ async function startServer() {
 
       if (!swap) return res.status(404).json({ error: "Swap request not found" });
 
+      // Only one administrator needs to approve or reject a swap. If another
+      // administrator already resolved it, don't let a second admin silently
+      // overwrite that decision (or double-apply the shift swap).
+      if (swap.status === "APPROVED_ADMIN" || swap.status === "REJECTED_ADMIN") {
+        return res.status(409).json({
+          error: `Deze ruil is al ${swap.status === "APPROVED_ADMIN" ? "goedgekeurd" : "geweigerd"} door een andere beheerder.`,
+        });
+      }
+
       if (status === "APPROVED_ADMIN" && swap.status !== "ACCEPTED_TARGET") {
         return res.status(400).json({ error: "Swap can only be approved after the colleague has accepted it" });
       }
@@ -2446,6 +2470,15 @@ async function startServer() {
       const admin = await prisma.user.findUnique({ where: { id: payload.adminUserId } });
       if (!admin || admin.role !== "ADMINISTRATOR") {
         return res.status(403).send("Deze link hoort niet bij een beheerder.");
+      }
+
+      // Only one administrator needs to approve or reject a swap. If another
+      // administrator already resolved it via the app or another email link,
+      // don't let this click silently overwrite that decision.
+      if (swap.status === "APPROVED_ADMIN" || swap.status === "REJECTED_ADMIN") {
+        return res.status(409).send(
+          `Deze ruil is al ${swap.status === "APPROVED_ADMIN" ? "goedgekeurd" : "geweigerd"} door een andere beheerder.`
+        );
       }
 
       if (payload.response === "APPROVED_ADMIN" && swap.status !== "ACCEPTED_TARGET") {
@@ -2861,16 +2894,15 @@ async function startServer() {
         },
       });
 
-      let employee = null;
-      if (user.role === "EMPLOYEE") {
-        employee = await prisma.employee.create({
-          data: {
-            userId: user.id,
-            preferredShifts: "[]",
-            preferredColleagues: "[]",
-          },
-        });
-      }
+      // Every user gets an Employee profile, regardless of role, so that
+      // administrators can also be assigned to shifts (not just employees).
+      const employee = await prisma.employee.create({
+        data: {
+          userId: user.id,
+          preferredShifts: "[]",
+          preferredColleagues: "[]",
+        },
+      });
 
       await logAction(req.user.id, "ADMIN_CREATE_USER", `Beheerder heeft gebruiker ${user.email} aangemaakt met de rol ${user.role}`);
       return res.status(201).json({ user: { id: user.id, email: user.email, role: user.role, name: user.name, employee } });
@@ -2959,8 +2991,11 @@ async function startServer() {
         data: updateData,
       });
 
-      // Handle employee profile creation or deletion if role changes
-      if (updatedUser.role === "EMPLOYEE" && !userToUpdate.employee) {
+      // Every user needs an Employee profile, regardless of role, so that
+      // administrators can also be assigned to shifts. Back-fill it here for
+      // any pre-existing account (e.g. an administrator created before this
+      // change) that doesn't have one yet.
+      if (!userToUpdate.employee) {
         await prisma.employee.create({
           data: {
             userId: updatedUser.id,
