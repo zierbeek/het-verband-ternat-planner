@@ -806,9 +806,27 @@ async function startServer() {
       const effectiveStart = startTime || shift.startTime;
       const effectiveEnd = endTime || shift.endTime;
 
-      if (employeeId) {
+      // Which employee(s) must be checked against the double-booking restriction?
+      // - `employeeId` explicitly present in the request body (e.g. the "Medewerker
+      //   toewijzen" dialog) means the caller is deliberately (re)assigning someone,
+      //   so check that employee. An explicit falsy value (null/"") means "unassign",
+      //   which never conflicts.
+      // - `employeeId` absent from the body happens when a shift is dragged to a new
+      //   day/slot without touching its assignment (see handlePlannerDrop on the
+      //   client). The shift keeps its current employee(s), so the restriction must
+      //   still be checked against them for the new date/time - otherwise moving an
+      //   already-assigned shift onto a day where that employee is already booked
+      //   silently bypasses the restriction.
+      const employeeIdsToCheck: string[] =
+        employeeId !== undefined
+          ? employeeId
+            ? [employeeId]
+            : []
+          : shift.assignments.map((a) => a.employeeId);
+
+      for (const empId of employeeIdsToCheck) {
         const conflict = await findBookingConflict(
-          employeeId,
+          empId,
           { date: effectiveDate, startTime: effectiveStart, endTime: effectiveEnd },
           [id]
         );

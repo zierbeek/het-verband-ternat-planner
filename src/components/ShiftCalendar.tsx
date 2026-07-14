@@ -371,8 +371,10 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
 
       if (res.ok) {
         showFeedback(editEmployeeId ? "Shift succesvol toegewezen!" : "Shift weer onbezet gemaakt!");
-        setIsEditModalOpen(false);
         fetchShifts();
+        // Small delay so the confirmation message is actually visible before the
+        // dialog disappears, instead of closing instantly on the same tick.
+        setTimeout(() => setIsEditModalOpen(false), 700);
       } else {
         const err = await res.json();
         showFeedback(err.error || "Fout bij het bijwerken van de toewijzing", "error");
@@ -511,8 +513,14 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
     return getShiftsForDate(date).filter((shift) => getShiftSlot(shift) === slot);
   };
 
-  const handlePlannerDrop = async (date: Date, slot: PlannerSlot) => {
+  const handlePlannerDrop = async (event: React.DragEvent, date: Date, slot: PlannerSlot) => {
     if (!draggedItem || user.role !== "ADMINISTRATOR") return;
+
+    // Holding Ctrl (or Cmd on macOS) while dropping duplicates the shift onto the
+    // target day/slot instead of moving the original one. Only applies to an
+    // existing shift being re-dropped - dragging a preset template already creates
+    // a new shift, so there's nothing extra to "copy" there.
+    const isCopyDrag = draggedItem.type === "shift" && (event.ctrlKey || event.metaKey);
 
     const dateStr = date.toISOString().split("T")[0];
 
@@ -547,6 +555,36 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
         } else {
           const err = await res.json();
           showFeedback(err.error || "Fout bij het aanmaken van de shift", "error");
+        }
+      } else if (isCopyDrag) {
+        const sourceShift = shifts.find((s) => s.id === draggedItem.shiftId);
+        const slotConfig = slotPresets[slot];
+        const employeeId = sourceShift?.assignments?.[0]?.employeeId;
+
+        const res = await fetch("/api/shifts", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            name: sourceShift?.name || slotConfig.label,
+            startTime: slotConfig.startTime,
+            endTime: slotConfig.endTime,
+            date: dateStr,
+            color: sourceShift?.color || slotConfig.color,
+            requiredEmployees: sourceShift?.requiredEmployees || 1,
+            notes: sourceShift?.notes,
+            ...(employeeId ? { employeeId } : {}),
+          }),
+        });
+
+        if (res.ok) {
+          showFeedback(`${sourceShift?.name || slotConfig.label} gekopieerd naar ${dateStr}`);
+          fetchShifts();
+        } else {
+          const err = await res.json();
+          showFeedback(err.error || "Fout bij het kopiëren van de shift", "error");
         }
       } else {
         const slotConfig = slotPresets[slot];
@@ -787,6 +825,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                     <h3 className="text-sm font-bold tracking-tight">Snelle planning</h3>
                     <p className="text-xs text-slate-300 mt-0.5">
                       Sleep een preset naar een dagdeel, of versleep een bestaande shift naar een ander vak of een andere dag.
+                      Houd Ctrl (of Cmd) ingedrukt tijdens het slepen om de shift te kopiëren in plaats van te verplaatsen.
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -852,7 +891,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                           onDragLeave={() => {
                             if (draggedSlot === slotKey) setDraggedSlot(null);
                           }}
-                          onDrop={() => handlePlannerDrop(date, slot.key)}
+                          onDrop={(event) => handlePlannerDrop(event, date, slot.key)}
                           className={`rounded-xl border p-2 min-h-[130px] flex flex-col gap-2 transition ${
                             draggedSlot === slotKey
                               ? "border-blue-400 bg-blue-50/60"
@@ -968,7 +1007,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                       onDragLeave={() => {
                         if (draggedSlot === slotKey) setDraggedSlot(null);
                       }}
-                      onDrop={() => handlePlannerDrop(currentDate, slot)}
+                      onDrop={(event) => handlePlannerDrop(event, currentDate, slot)}
                       className={`rounded-2xl border p-4 transition ${
                         draggedSlot === slotKey ? "border-blue-400 bg-blue-50/60" : "border-slate-200 bg-slate-50/50"
                       }`}
