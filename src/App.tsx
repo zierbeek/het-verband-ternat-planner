@@ -11,6 +11,7 @@ import {
   Menu,
   X,
   User,
+  HelpCircle,
 } from "lucide-react";
 import Login from "./components/Login.tsx";
 import Dashboard from "./components/Dashboard.tsx";
@@ -73,6 +74,10 @@ export default function App() {
   const handleCompleteGuide = () => {
     setHasCompletedGuide(true);
     localStorage.setItem("completedFirstTimeGuide", "true");
+  };
+
+  const handleOpenGuide = () => {
+    setShowFirstTimeGuide(true);
   };
 
   useEffect(() => {
@@ -180,6 +185,14 @@ export default function App() {
           <div className="h-9 w-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 border border-slate-200/50">
             <User className="h-5 w-5" style={getUserColorStyle(user.id, 0.25)} />
           </div>
+
+          <button
+            onClick={handleOpenGuide}
+            className="p-1.5 border border-slate-200 hover:bg-slate-50 rounded-lg text-slate-600 transition"
+            title="Snelle start handleiding"
+          >
+            <HelpCircle className="h-4 w-4" />
+          </button>
 
           <button
             onClick={handleLogout}
@@ -307,6 +320,13 @@ export default function App() {
         })}
       </nav>
 
+      {/* Start Guide - shown automatically on first admin login, or on demand via the header help button */}
+      {showFirstTimeGuide && (
+        <FirstTimeGuide
+          onClose={() => setShowFirstTimeGuide(false)}
+          onComplete={handleCompleteGuide}
+        />
+      )}
 
     </div>
   );
