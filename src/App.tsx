@@ -18,6 +18,7 @@ import ShiftCalendar from "./components/ShiftCalendar.tsx";
 import LeaveManagement from "./components/LeaveManagement.tsx";
 import SwapWorkflows from "./components/SwapWorkflows.tsx";
 import AdminPanel from "./components/AdminPanel.tsx";
+import FirstTimeGuide from "./components/FirstTimeGuide.tsx";
 import PasswordChangeModal from "./components/PasswordChangeModal.tsx";
 import { getUserColorStyle } from "./utils/userColor.ts";
 
@@ -28,6 +29,10 @@ export default function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [adminOpenRequests, setAdminOpenRequests] = useState<number>(0);
+  const [showFirstTimeGuide, setShowFirstTimeGuide] = useState(false);
+  const [hasCompletedGuide, setHasCompletedGuide] = useState(() => {
+    return localStorage.getItem("completedFirstTimeGuide") === "true";
+  });
 
   // Quick state synchronization
   const fetchCurrentUser = async (authToken: string) => {
@@ -52,6 +57,22 @@ export default function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Check if we should show first-time guide
+  useEffect(() => {
+    if (user && user.role === "ADMINISTRATOR" && !hasCompletedGuide) {
+      // Show guide after a short delay to allow UI to settle
+      const timer = setTimeout(() => {
+        setShowFirstTimeGuide(true);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [user, hasCompletedGuide]);
+
+  const handleCompleteGuide = () => {
+    setHasCompletedGuide(true);
+    localStorage.setItem("completedFirstTimeGuide", "true");
   };
 
   useEffect(() => {
