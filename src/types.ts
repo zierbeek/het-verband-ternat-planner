@@ -37,6 +37,7 @@ export interface ShiftPreset {
   endTime: string;
   color: string;
   order: number;
+  defaultEmployeeId?: string | null;
 }
 
 export interface ShiftAssignment {

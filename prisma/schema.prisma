@@ -35,6 +35,7 @@ model Employee {
   changeRequests     ShiftChangeRequest[]
   sentSwaps          SwapRequest[]        @relation("RequesterSwaps")
   receivedSwaps      SwapRequest[]        @relation("TargetSwaps")
+  defaultForPresets  ShiftPreset[]        @relation("PresetDefaultEmployee")
 }
 
 model Shift {
@@ -61,14 +62,16 @@ model Shift {
 // hardcoded morning/afternoon-only list so administrators can rename presets
 // and add as many extra ones as they need (night shifts, weekend shifts...).
 model ShiftPreset {
-  id        String   @id @default(uuid())
-  label     String
-  startTime String   // "HH:MM"
-  endTime   String   // "HH:MM"
-  color     String   @default("#10b981")
-  order     Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                String    @id @default(uuid())
+  label             String
+  startTime         String    // "HH:MM"
+  endTime           String    // "HH:MM"
+  color             String    @default("#10b981")
+  order             Int       @default(0)
+  defaultEmployeeId String?
+  defaultEmployee   Employee? @relation("PresetDefaultEmployee", fields: [defaultEmployeeId], references: [id], onDelete: SetNull)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 }
 
 model ShiftAssignment {

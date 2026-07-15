@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -78,8 +78,9 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
   const [newPresetStart, setNewPresetStart] = useState("06:00");
   const [newPresetEnd, setNewPresetEnd] = useState("14:00");
   const [newPresetColor, setNewPresetColor] = useState("#6366f1");
+  const [newPresetDefaultEmployeeId, setNewPresetDefaultEmployeeId] = useState("");
   const [editingPresetId, setEditingPresetId] = useState<string | null>(null);
-  const [editPresetDraft, setEditPresetDraft] = useState<{ label: string; startTime: string; endTime: string; color: string } | null>(null);
+  const [editPresetDraft, setEditPresetDraft] = useState<{ label: string; startTime: string; endTime: string; color: string; defaultEmployeeId: string } | null>(null);
 
   // Form states for Create Shift
   const [shiftName, setShiftName] = useState("Voormiddag");
@@ -131,6 +132,33 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
       return () => clearTimeout(timer);
     }
   }, [feedbackMessage]);
+
+  // Some browsers (Chrome/Edge in particular) don't reliably update
+  // event.ctrlKey/metaKey on dragover/drop events while a native drag is in
+  // progress. To make Ctrl(+drag)-to-copy work everywhere, we track the
+  // modifier key state ourselves via plain keydown/keyup listeners - the key
+  // just needs to be pressed before the drag starts and released after the
+  // drop, which is how users naturally hold it anyway.
+  const isCopyModifierPressed = useRef(false);
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Control" || e.key === "Meta") isCopyModifierPressed.current = true;
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "Control" || e.key === "Meta") isCopyModifierPressed.current = false;
+    };
+    const handleBlur = () => {
+      isCopyModifierPressed.current = false;
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("blur", handleBlur);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", handleBlur);
+    };
+  }, []);
 
   const fetchShifts = async () => {
     try {
@@ -228,6 +256,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
           startTime: newPresetStart,
           endTime: newPresetEnd,
           color: newPresetColor,
+          defaultEmployeeId: newPresetDefaultEmployeeId || null,
         }),
       });
       if (res.ok) {
@@ -235,6 +264,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
         setNewPresetStart("06:00");
         setNewPresetEnd("14:00");
         setNewPresetColor("#6366f1");
+        setNewPresetDefaultEmployeeId("");
         fetchPresets();
         showFeedback("Preset toegevoegd!");
       } else {
@@ -249,7 +279,13 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
 
   const startEditingPreset = (preset: ShiftPreset) => {
     setEditingPresetId(preset.id);
-    setEditPresetDraft({ label: preset.label, startTime: preset.startTime, endTime: preset.endTime, color: preset.color });
+    setEditPresetDraft({
+      label: preset.label,
+      startTime: preset.startTime,
+      endTime: preset.endTime,
+      color: preset.color,
+      defaultEmployeeId: preset.defaultEmployeeId || "",
+    });
   };
 
   const handleSavePreset = async (presetId: string) => {
@@ -261,7 +297,10 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(editPresetDraft),
+        body: JSON.stringify({
+          ...editPresetDraft,
+          defaultEmployeeId: editPresetDraft.defaultEmployeeId || null,
+        }),
       });
       if (res.ok) {
         setEditingPresetId(null);
@@ -520,7 +559,8 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
     // target day/slot instead of moving the original one. Only applies to an
     // existing shift being re-dropped - dragging a preset template already creates
     // a new shift, so there's nothing extra to "copy" there.
-    const isCopyDrag = draggedItem.type === "shift" && (event.ctrlKey || event.metaKey);
+    const isCopyDrag =
+      draggedItem.type === "shift" && (isCopyModifierPressed.current || event.ctrlKey || event.metaKey);
 
     const dateStr = date.toISOString().split("T")[0];
 
@@ -546,6 +586,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
             date: dateStr,
             color: preset.color,
             requiredEmployees: 1,
+            ...(preset.defaultEmployeeId ? { employeeId: preset.defaultEmployeeId } : {}),
           }),
         });
 
@@ -1132,6 +1173,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                       setStartTime(matchedPreset.startTime);
                       setEndTime(matchedPreset.endTime);
                       setShiftColor(matchedPreset.color);
+                      setAssignEmployeeId(matchedPreset.defaultEmployeeId || "");
                     }
                   }}
                   className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg font-medium"
@@ -1503,6 +1545,8 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
             <p className="text-xs text-slate-500">
               Deze presets verschijnen als sleepbare snelkeuzes bij "Snelle planning" en in de lijst van de "Nieuwe Shift"-modal.
               De eerste twee (op volgorde) bepalen ook de twee kolommen in de week- en dagweergave.
+              Stel je een standaard medewerker in, dan wordt die automatisch toegewezen zodra de preset gebruikt wordt
+              (de dubbele-boeking restrictie blijft hierbij van toepassing).
             </p>
 
             <div className="space-y-2">
@@ -1542,6 +1586,23 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                           className="h-8 w-full p-1 border border-slate-300 rounded-lg cursor-pointer"
                         />
                       </div>
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                          Standaard medewerker (optioneel)
+                        </label>
+                        <select
+                          value={editPresetDraft.defaultEmployeeId}
+                          onChange={(e) => setEditPresetDraft({ ...editPresetDraft, defaultEmployeeId: e.target.value })}
+                          className="block w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs font-medium"
+                        >
+                          <option value="">-- Geen, telkens handmatig kiezen --</option>
+                          {employees.map((emp) => (
+                            <option key={emp.id} value={emp.id}>
+                              {emp.user?.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                       <div className="flex gap-2 justify-end">
                         <button
                           type="button"
@@ -1569,6 +1630,11 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                         <div className="min-w-0">
                           <p className="font-semibold text-slate-800 text-sm truncate">{preset.label}</p>
                           <p className="text-[11px] text-slate-500 font-mono">{preset.startTime} - {preset.endTime}</p>
+                          {preset.defaultEmployeeId && (
+                            <p className="text-[10px] text-blue-600 font-semibold truncate">
+                              Standaard: {employees.find((emp) => emp.id === preset.defaultEmployeeId)?.user?.name || "Onbekend"}
+                            </p>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
@@ -1628,6 +1694,23 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                   onChange={(e) => setNewPresetColor(e.target.value)}
                   className="h-9 w-full p-1 border border-slate-300 rounded-lg cursor-pointer"
                 />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                  Standaard medewerker (optioneel)
+                </label>
+                <select
+                  value={newPresetDefaultEmployeeId}
+                  onChange={(e) => setNewPresetDefaultEmployeeId(e.target.value)}
+                  className="block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                >
+                  <option value="">-- Geen, telkens handmatig kiezen --</option>
+                  {employees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.user?.name}
+                    </option>
+                  ))}
+                </select>
               </div>
               <button
                 type="submit"

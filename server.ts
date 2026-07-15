@@ -1405,7 +1405,7 @@ async function startServer() {
   });
 
   app.post("/api/shift-presets", authenticate, requireAdmin, async (req: any, res) => {
-    const { label, startTime, endTime, color } = req.body;
+    const { label, startTime, endTime, color, defaultEmployeeId } = req.body;
     if (!label || !startTime || !endTime) {
       return res.status(400).json({ error: "Naam, starttijd en eindtijd zijn verplicht." });
     }
@@ -1419,6 +1419,7 @@ async function startServer() {
           endTime,
           color: color || "#10b981",
           order: highest ? highest.order + 1 : 0,
+          defaultEmployeeId: defaultEmployeeId || null,
         },
       });
       await logAction(req.user.id, "SHIFT_PRESET_CREATE", `Created shift preset: ${label} (${startTime}-${endTime})`);
@@ -1430,7 +1431,7 @@ async function startServer() {
 
   app.put("/api/shift-presets/:id", authenticate, requireAdmin, async (req: any, res) => {
     const { id } = req.params;
-    const { label, startTime, endTime, color, order } = req.body;
+    const { label, startTime, endTime, color, order, defaultEmployeeId } = req.body;
 
     try {
       const existing = await prisma.shiftPreset.findUnique({ where: { id } });
@@ -1444,6 +1445,7 @@ async function startServer() {
           endTime: endTime !== undefined ? endTime : existing.endTime,
           color: color !== undefined ? color : existing.color,
           order: order !== undefined ? Number(order) : existing.order,
+          defaultEmployeeId: defaultEmployeeId !== undefined ? (defaultEmployeeId || null) : existing.defaultEmployeeId,
         },
       });
       await logAction(req.user.id, "SHIFT_PRESET_UPDATE", `Updated shift preset ${id}`, existing, updated);
