@@ -179,7 +179,7 @@ export default function LeaveManagement({ user, token }: LeaveManagementProps) {
           </p>
         </div>
 
-        {user.role === "EMPLOYEE" && (
+        {(user.role === "EMPLOYEE" || user.role === "ADMINISTRATOR") && user.employee && (
           <button
             onClick={() => setIsNewRequestOpen(true)}
             className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-xl text-xs font-semibold text-white transition shadow-xs cursor-pointer"
@@ -246,7 +246,7 @@ export default function LeaveManagement({ user, token }: LeaveManagementProps) {
                 </div>
 
                 {/* Cancel trigger for the requesting employee */}
-                {user.role === "EMPLOYEE" &&
+                {(user.role === "EMPLOYEE" || user.role === "ADMINISTRATOR") &&
                   leave.employeeId === user.employee?.id &&
                   (leave.status === "PENDING" || leave.status === "APPROVED") && (
                     <div className="border-t border-slate-200 pt-3">

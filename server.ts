@@ -1577,6 +1577,11 @@ async function startServer() {
       });
       if (!leave) return res.status(404).json({ error: "Leave request not found" });
 
+
+      // A beheerder cannot approve their own leave request
+      if (leave.employee.userId === req.user.id) {
+        return res.status(403).json({ error: "U kunt uw eigen verlofaanvraag niet goedkeuren. Vraag een andere beheerder om dit te doen." });
+      }
       // Only one administrator needs to approve a leave request. If another
       // administrator already resolved it (approved, rejected or cancelled),
       // don't let a second approval silently overwrite that decision.
@@ -1643,6 +1648,11 @@ async function startServer() {
       });
       if (!leave) return res.status(404).json({ error: "Leave request not found" });
 
+
+      // A beheerder cannot reject their own leave request
+      if (leave.employee.userId === req.user.id) {
+        return res.status(403).json({ error: "U kunt uw eigen verlofaanvraag niet weigeren. Vraag een andere beheerder om dit te doen." });
+      }
       // Only one administrator needs to decide on a leave request. If another
       // administrator already resolved it, don't silently overwrite that.
       if (leave.status !== "PENDING") {
@@ -2248,6 +2258,10 @@ async function startServer() {
         return res.status(409).json({
           error: `Deze ruil is al ${swap.status === "APPROVED_ADMIN" ? "goedgekeurd" : "geweigerd"} door een andere beheerder.`,
         });
+
+      // A beheerder cannot approve or reject their own swap request
+      if (swap.requester.userId === req.user.id || swap.target.userId === req.user.id) {
+        return res.status(403).json({ error: "U kunt een ruilaanvraag waarbij u betrokken bent niet zelf goedkeuren of weigeren. Vraag een andere beheerder om dit te doen." });
       }
 
       if (status === "APPROVED_ADMIN" && swap.status !== "ACCEPTED_TARGET") {
