@@ -512,10 +512,10 @@ export default function AdminPanel({ user, token }: AdminPanelProps) {
 
   if (user.role !== "ADMINISTRATOR") {
     return (
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs text-center space-y-3">
+      <div className="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-xs text-center space-y-3">
         <ShieldAlert className="h-10 w-10 text-rose-500 mx-auto" />
         <h3 className="text-lg font-bold text-slate-800">Toegang Geweigerd</h3>
-        <p className="text-sm text-slate-500 max-w-md mx-auto">
+        <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto">
           Het beheercentrum bevat gevoelige organisatiegegevens, logboeken en rapporten en is alleen toegankelijk voor beheerders.
         </p>
       </div>
@@ -618,12 +618,12 @@ export default function AdminPanel({ user, token }: AdminPanelProps) {
               </div>
 
               {/* Employee allocations list */}
-              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">
+              <div className="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+                <h3 className="text-xs sm:text-sm font-bold text-slate-500 uppercase tracking-wider">
                   Medewerker Toewijzing & Uren Statistieken
                 </h3>
 
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto touch-pan-x">
                   <table className="w-full text-left border-collapse text-xs text-slate-600">
                     <thead>
                       <tr className="border-b border-slate-200 bg-slate-50 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
@@ -659,20 +659,20 @@ export default function AdminPanel({ user, token }: AdminPanelProps) {
 
       {/* Employees Management tab */}
       {activeTab === "employees" && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:p-4">
           
           {/* Create or Edit Employee Column */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+          <div className="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-xs space-y-4">
             {editingUser ? (
               <>
-                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                <h3 className="text-xs sm:text-sm font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
                   <Edit className="h-4.5 w-4.5 text-blue-600" /> Account Aanpassen
                 </h3>
                 <p className="text-xs text-slate-400">
                   Pas de naam, het e-mailadres, de rol of het wachtwoord aan van <strong>{editingUser.name}</strong>.
                 </p>
 
-                <form onSubmit={handleUpdateEmployee} className="space-y-4 text-sm text-slate-700">
+                <form onSubmit={handleUpdateEmployee} className="space-y-4 text-xs sm:text-sm text-slate-700">
                   <div>
                     <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide">Volledige Naam</label>
                     <input
@@ -747,14 +747,14 @@ export default function AdminPanel({ user, token }: AdminPanelProps) {
               </>
             ) : (
               <>
-                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                <h3 className="text-xs sm:text-sm font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
                   <UserPlus className="h-4.5 w-4.5 text-blue-600" /> Nieuwe Medewerker Toevoegen
                 </h3>
                 <p className="text-xs text-slate-400">
                   Maak een nieuw account aan voor een teamlid. Alleen beheerders kunnen accounts aanmaken.
                 </p>
 
-                <form onSubmit={handleAddEmployee} className="space-y-4 text-sm text-slate-700">
+                <form onSubmit={handleAddEmployee} className="space-y-4 text-xs sm:text-sm text-slate-700">
                   <div>
                     <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide">Volledige Naam</label>
                     <input
@@ -816,8 +816,8 @@ export default function AdminPanel({ user, token }: AdminPanelProps) {
           </div>
 
           {/* List Employees Column */}
-          <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+          <div className="lg:col-span-2 bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+            <h3 className="text-xs sm:text-sm font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
               <Users className="h-4.5 w-4.5 text-blue-600" /> Geregistreerde Gebruikers & Rollen ({employeesList.length})
             </h3>
 
@@ -830,7 +830,7 @@ export default function AdminPanel({ user, token }: AdminPanelProps) {
                 Geen accounts gevonden.
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto touch-pan-x">
                 <table className="w-full text-left border-collapse text-xs text-slate-600">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
@@ -921,18 +921,18 @@ export default function AdminPanel({ user, token }: AdminPanelProps) {
 
       {/* Settings & DB Reset tab */}
       {activeTab === "settings" && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:p-4">
 
           {/* Email Settings */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+          <div className="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+            <h3 className="text-xs sm:text-sm font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
               <Mail className="h-4.5 w-4.5 text-blue-600" /> E-mailnotificaties & SMTP / Resend Configureren
             </h3>
             <p className="text-xs text-slate-400 leading-relaxed">
               Kies hoe de planner e-mails verzendt. U kunt kiezen voor een gratis Resend API Key, of uw eigen SMTP-servergegevens (bijv. van uw provider of Google App Password) invoeren.
             </p>
 
-            <form onSubmit={handleSaveSettings} className="space-y-4 text-sm text-slate-700">
+            <form onSubmit={handleSaveSettings} className="space-y-4 text-xs sm:text-sm text-slate-700">
               <div>
                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide">E-maildienst Type</label>
                 <select
@@ -1126,9 +1126,9 @@ export default function AdminPanel({ user, token }: AdminPanelProps) {
           </div>
 
           {/* Database Reset & System Stats */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between space-y-6">
+          <div className="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between space-y-6">
             <div className="space-y-4">
-              <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+              <h3 className="text-xs sm:text-sm font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
                 <AlertTriangle className="h-4.5 w-4.5 text-amber-500" /> Systeem Database Reset & Vertaling
               </h3>
               <p className="text-xs text-slate-400 leading-relaxed">
@@ -1183,10 +1183,10 @@ export default function AdminPanel({ user, token }: AdminPanelProps) {
 
       {/* Audit Logs tab */}
       {activeTab === "logs" && (
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+        <div className="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-xs space-y-4">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <div>
-              <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">
+              <h3 className="text-xs sm:text-sm font-bold text-slate-500 uppercase tracking-wider">
                 Systeem Actie Trail & Audit Logboeken
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">Volg alle shiftcreaties, ruilingen, registraties en verwijderingen.</p>
@@ -1214,7 +1214,7 @@ export default function AdminPanel({ user, token }: AdminPanelProps) {
               Geen acties gevonden die voldoen aan de zoekterm.
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto touch-pan-x">
               <table className="w-full text-left border-collapse text-xs text-slate-600">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
@@ -1248,10 +1248,10 @@ export default function AdminPanel({ user, token }: AdminPanelProps) {
 
       {/* Email Logs tab */}
       {activeTab === "emails" && (
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+        <div className="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-xs space-y-4">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <div>
-              <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+              <h3 className="text-xs sm:text-sm font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
                 <Mail className="h-4.5 w-4.5 text-blue-500" /> Verzonden E-mailnotificaties Logboek
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">Overzicht van alle e-mailnotificaties verstuurd door de planner.</p>
@@ -1279,7 +1279,7 @@ export default function AdminPanel({ user, token }: AdminPanelProps) {
               Geen verzonden e-mails gevonden die voldoen aan de zoekterm.
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto touch-pan-x">
               <table className="w-full text-left border-collapse text-xs text-slate-600">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
@@ -1321,15 +1321,15 @@ export default function AdminPanel({ user, token }: AdminPanelProps) {
 
       {/* Post Announcement tab */}
       {activeTab === "announcements" && (
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4 max-w-xl">
-          <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+        <div className="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-xs space-y-4 max-w-xl">
+          <h3 className="text-xs sm:text-sm font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
             <Megaphone className="h-4.5 w-4.5 text-blue-500" /> Mededeling Verspreiden naar het Team
           </h3>
           <p className="text-xs text-slate-400 leading-relaxed">
             Schrijf een belangrijk bericht dat onmiddellijk op de dashboards van alle medewerkers zal verschijnen. Dit verstuurt tevens meldingen naar alle verpleegkundigen.
           </p>
 
-          <form onSubmit={handlePostAnnouncement} className="space-y-4 text-sm text-slate-700">
+          <form onSubmit={handlePostAnnouncement} className="space-y-4 text-xs sm:text-sm text-slate-700">
             <div>
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide">Titel van Mededeling</label>
               <input

@@ -181,7 +181,7 @@ export default function Dashboard({ user, token }: DashboardProps) {
             {user.role === "EMPLOYEE" && " • Thuisverpleging Het Verband Ternat Planner"}
           </p>
         </div>
-        <div className="flex items-center gap-3 bg-blue-50 text-blue-700 px-4 py-2.5 rounded-xl border border-blue-100">
+        <div className="flex items-center gap-3 bg-blue-50 text-blue-700 px-4 py-2.5.5 rounded-xl border border-blue-100">
           <Clock className="h-5 w-5" />
           <div className="text-xs font-mono font-medium">
             Tijdstip: {new Date().toISOString().substring(0, 16).replace("T", " ")}
@@ -216,7 +216,7 @@ export default function Dashboard({ user, token }: DashboardProps) {
                   >
                     <div>
                       <h4 className="font-semibold text-slate-800 text-sm">{shift.name}</h4>
-                      <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
+                      <div className="flex items-center gap-3 text-xs sm:text-sm text-slate-500 mt-1">
                         <span className="flex items-center gap-1">
                           <Clock className="h-3 w-3" /> {shift.startTime} - {shift.endTime}
                         </span>
@@ -226,7 +226,7 @@ export default function Dashboard({ user, token }: DashboardProps) {
                         </span>
                       </div>
                       {shift.notes && (
-                        <p className="text-xs text-slate-500 mt-1.5 italic font-mono bg-white p-1 rounded border border-slate-200">
+                        <p className="text-xs sm:text-sm text-slate-500 mt-1.5 italic font-mono bg-white p-1 rounded border border-slate-200">
                           Opmerking: {shift.notes}
                         </p>
                       )}
@@ -244,7 +244,7 @@ export default function Dashboard({ user, token }: DashboardProps) {
                           </span>
                         ))
                       ) : (
-                        <span className="text-red-500 text-xs font-semibold bg-red-50 border border-red-100 px-2.5 py-0.5 rounded-full">
+                        <span className="text-red-500 text-xs sm:text-sm font-semibold bg-red-50 border border-red-100 px-2.5 py-0.5 rounded-full">
                           Onbezet
                         </span>
                       )}
@@ -276,7 +276,7 @@ export default function Dashboard({ user, token }: DashboardProps) {
                   >
                     <div>
                       <h4 className="font-semibold text-slate-800 text-sm">{shift.name}</h4>
-                      <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
+                      <div className="flex items-center gap-3 text-xs sm:text-sm text-slate-500 mt-1">
                         <span className="flex items-center gap-1">
                           <Clock className="h-3 w-3" /> {shift.startTime} - {shift.endTime}
                         </span>
@@ -299,7 +299,7 @@ export default function Dashboard({ user, token }: DashboardProps) {
                           </span>
                         ))
                       ) : (
-                        <span className="text-red-500 text-xs font-semibold bg-red-50 border border-red-100 px-2.5 py-0.5 rounded-full">
+                        <span className="text-red-500 text-xs sm:text-sm font-semibold bg-red-50 border border-red-100 px-2.5 py-0.5 rounded-full">
                           Onbezet
                         </span>
                       )}
@@ -455,10 +455,10 @@ export default function Dashboard({ user, token }: DashboardProps) {
 
           {/* iCal Calendar Sync */}
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+            <h3 className="text-xs sm:text-sm font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
               <Calendar className="h-4.5 w-4.5 text-blue-500" /> Kalender Synchroniseren
             </h3>
-            <p className="text-xs text-slate-500 leading-relaxed">
+            <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
               Koppel je werkrooster direct aan je iPhone, Google Calendar of Outlook. Wijzigingen op het planbord worden automatisch gesynchroniseerd!
             </p>
             <div className="space-y-2">
@@ -495,17 +495,17 @@ export default function Dashboard({ user, token }: DashboardProps) {
 
           {/* Quick Stats Panel */}
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">
+            <h3 className="text-xs sm:text-sm font-bold text-slate-500 uppercase tracking-wider">
               Wekelijks Overzicht
             </h3>
             
             <div className="grid grid-cols-2 gap-4">
               <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-                <span className="text-xs text-slate-500">Geplande Shifts</span>
+                <span className="text-xs sm:text-sm text-slate-500">Geplande Shifts</span>
                 <p className="text-2xl font-bold text-slate-900 mt-1">{shifts.length}</p>
               </div>
               <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-                <span className="text-xs text-slate-500">Toegewezen Team</span>
+                <span className="text-xs sm:text-sm text-slate-500">Toegewezen Team</span>
                 <p className="text-2xl font-bold text-slate-900 mt-1">
                   {shifts.filter((s) => s.assignments && s.assignments.length > 0).length}
                 </p>
@@ -514,7 +514,7 @@ export default function Dashboard({ user, token }: DashboardProps) {
 
             <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
               <div>
-                <span className="text-xs text-slate-500">Dekkingspercentage</span>
+                <span className="text-xs sm:text-sm text-slate-500">Dekkingspercentage</span>
                 <p className="text-lg font-bold text-slate-900 mt-0.5">
                   {shifts.length > 0
                     ? Math.round((shifts.filter((s) => s.assignments && s.assignments.length > 0).length / shifts.length) * 100)
