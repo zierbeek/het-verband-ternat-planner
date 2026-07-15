@@ -165,7 +165,7 @@ async function startServer() {
           const errorText = await response.text();
           status = `Resend Fout: ${errorText}`;
         }
-      } catch (e: any) {
+      } catch (e) {
         status = `Resend Fout: ${e.message}`;
       }
     } else if (emailServiceType === "smtp" && smtpHost && smtpUser && smtpPass) {
@@ -187,7 +187,7 @@ async function startServer() {
           html: emailHtml,
         });
         status = "Verzonden via SMTP";
-      } catch (e: any) {
+      } catch (e) {
         status = `SMTP Fout: ${e.message}`;
       }
     }
@@ -352,7 +352,7 @@ async function startServer() {
 
       const token = generateToken(user);
       return res.status(201).json({ token, user: { id: user.id, email: user.email, role: user.role, name: user.name, employee } });
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -404,7 +404,7 @@ async function startServer() {
         },
         requiresPasswordChange,
       });
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -612,7 +612,7 @@ async function startServer() {
       // link is opened directly (this matters for the "Direct Abonneren" flow).
       res.setHeader("Content-Disposition", `inline; filename="planning-${userId}.ics"`);
       return res.send(ics);
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).send("Fout bij genereren van iCal feed: " + err.message);
     }
   });
@@ -633,7 +633,7 @@ async function startServer() {
         name: user.name,
         employee: user.employee,
       });
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -648,7 +648,7 @@ async function startServer() {
         include: { user: true },
       });
       return res.json(employees);
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -688,7 +688,7 @@ async function startServer() {
       );
 
       return res.json(updated);
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -729,7 +729,7 @@ async function startServer() {
         orderBy: { date: "asc" },
       });
       return res.json(shifts);
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -798,7 +798,7 @@ async function startServer() {
 
       await logAction(req.user.id, "SHIFT_CREATE", `Created shift: ${name} on ${date}`, null, shift);
       return res.status(201).json(shift);
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -904,7 +904,7 @@ async function startServer() {
 
       await logAction(req.user.id, "SHIFT_UPDATE", `Updated shift ${id}`, shift, updated);
       return res.json(updated);
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -934,7 +934,7 @@ async function startServer() {
       await prisma.shift.delete({ where: { id } });
       await logAction(req.user.id, "SHIFT_DELETE", `Deleted shift: ${shift.name} on ${shift.date}`, shift, null);
       return res.json({ success: true });
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -1013,7 +1013,7 @@ async function startServer() {
 
       await logAction(req.user.id, "SHIFT_COPY_WEEK", `Copied week ${sourceStartDate} to ${targetStartDate} (with employees: ${copyEmployees !== false})`);
       return res.json({ success: true, count: totalCreated, skippedConflicts });
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -1093,7 +1093,7 @@ async function startServer() {
 
       await logAction(req.user.id, "SHIFT_REPEAT_WEEK", `Repeated week ${sourceStartDate} for ${weeks} weeks into the future (Copy employees: ${copyEmployees})`);
       return res.json({ success: true, count: totalCreated, skippedConflicts });
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -1190,7 +1190,7 @@ async function startServer() {
 
       await logAction(req.user.id, "SHIFT_COPY_MONTH", `Copied month ${sourceYearMonth} to ${targetYearMonth} (with employees: ${copyEmployees})`);
       return res.json({ success: true, count: totalCreated, skippedConflicts });
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -1395,7 +1395,7 @@ async function startServer() {
 
       await logAction(req.user.id, "SHIFT_SEND_MONTHLY_EMAIL", `Sent monthly schedule emails for ${yearMonth} to ${emailsSentCount} recipients`);
       return res.json({ success: true, count: emailsSentCount });
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -1413,7 +1413,7 @@ async function startServer() {
         orderBy: { order: "asc" },
       });
       return res.json(presets);
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -1438,7 +1438,7 @@ async function startServer() {
       });
       await logAction(req.user.id, "SHIFT_PRESET_CREATE", `Created shift preset: ${label} (${startTime}-${endTime})`);
       return res.status(201).json(preset);
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -1464,7 +1464,7 @@ async function startServer() {
       });
       await logAction(req.user.id, "SHIFT_PRESET_UPDATE", `Updated shift preset ${id}`, existing, updated);
       return res.json(updated);
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -1478,7 +1478,7 @@ async function startServer() {
       await prisma.shiftPreset.delete({ where: { id } });
       await logAction(req.user.id, "SHIFT_PRESET_DELETE", `Deleted shift preset: ${existing.label}`);
       return res.json({ success: true });
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -1512,7 +1512,7 @@ async function startServer() {
         orderBy: { createdAt: "desc" },
       });
       return res.json(list);
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -1575,7 +1575,7 @@ async function startServer() {
 
       await logAction(req.user.id, "LEAVE_REQUEST", `Leave request created from ${startDate} to ${endDate}`);
       return res.status(201).json(request);
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -1646,7 +1646,7 @@ async function startServer() {
 
       await logAction(req.user.id, "LEAVE_APPROVE", `Approved leave request ${id} for employee ${leave.employeeId}`);
       return res.json(updated);
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -1716,7 +1716,7 @@ async function startServer() {
 
       await logAction(req.user.id, "LEAVE_REJECT", `Rejected leave request ${id}`);
       return res.json(updated);
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -1807,7 +1807,7 @@ async function startServer() {
 
       await logAction(req.user.id, "LEAVE_CANCEL", `Cancelled leave request ${id}`);
       return res.json(updated);
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -1839,7 +1839,7 @@ async function startServer() {
         orderBy: { createdAt: "desc" },
       });
       return res.json(list);
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -1902,7 +1902,7 @@ async function startServer() {
 
       await logAction(req.user.id, "SHIFT_CHANGE_REQUEST_CREATE", `Submitted shift change request: ${type}`);
       return res.status(201).json(request);
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -2002,7 +2002,7 @@ async function startServer() {
 
       await logAction(req.user.id, "SHIFT_CHANGE_REQUEST_RESOLVE", `Resolved shift change request ${id} as ${status}`);
       return res.json(updated);
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -2037,7 +2037,7 @@ async function startServer() {
         orderBy: { createdAt: "desc" },
       });
       return res.json(list);
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -2134,7 +2134,7 @@ async function startServer() {
 
       await logAction(req.user.id, "SWAP_REQUEST_CREATE", `Proposed shift swap with colleague ${targetId}`);
       return res.status(201).json(swap);
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -2239,7 +2239,7 @@ async function startServer() {
 
       await logAction(req.user.id, "SWAP_REQUEST_RESPONSE", `Responded ${response} to swap request ${id}`);
       return res.json(updated);
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -2376,7 +2376,7 @@ async function startServer() {
 
       await logAction(req.user.id, "SWAP_REQUEST_ADMIN_RESOLVE", `Admin resolved swap request ${id} as ${status}`);
       return res.json(updated);
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -2604,7 +2604,7 @@ async function startServer() {
         where: { employeeId },
       });
       return res.json(list);
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -2662,7 +2662,7 @@ async function startServer() {
 
       await logAction(req.user.id, "AVAILABILITY_UPDATE", `Updated availability settings for employee ${employeeId}`);
       return res.json(availability);
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -2679,7 +2679,7 @@ async function startServer() {
         orderBy: { createdAt: "desc" },
       });
       return res.json(list);
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -2733,7 +2733,7 @@ async function startServer() {
 
       await logAction(req.user.id, "ANNOUNCEMENT_CREATE", `Created announcement: ${title}`);
       return res.status(201).json(announcement);
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -2747,7 +2747,7 @@ async function startServer() {
       });
       await logAction(req.user.id, "ANNOUNCEMENT_ARCHIVE", `Archived announcement ${updated.title}`);
       return res.json(updated);
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -2758,7 +2758,7 @@ async function startServer() {
       await prisma.announcement.delete({ where: { id } });
       await logAction(req.user.id, "ANNOUNCEMENT_DELETE", `Deleted announcement ${id}`);
       return res.json({ success: true });
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -2774,7 +2774,7 @@ async function startServer() {
         orderBy: { createdAt: "desc" },
       });
       return res.json(list);
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -2787,7 +2787,7 @@ async function startServer() {
         data: { isRead: true },
       });
       return res.json({ success: true });
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -2800,7 +2800,7 @@ async function startServer() {
         data: { isArchived: true },
       });
       return res.json({ success: true, count: updated.count });
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -2812,7 +2812,7 @@ async function startServer() {
         where: { id, userId: req.user.id },
       });
       return res.json({ success: true, count: deleted.count });
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -2869,7 +2869,7 @@ async function startServer() {
         totalShifts,
         employeeStats,
       });
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -2886,7 +2886,7 @@ async function startServer() {
         take: 100,
       });
       return res.json(logs);
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -2899,7 +2899,7 @@ async function startServer() {
     try {
       const list = getSentEmails();
       return res.json(list);
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -2915,7 +2915,7 @@ async function startServer() {
         orderBy: { name: "asc" },
       });
       return res.json(list);
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -2954,7 +2954,7 @@ async function startServer() {
 
       await logAction(req.user.id, "ADMIN_CREATE_USER", `Beheerder heeft gebruiker ${user.email} aangemaakt met de rol ${user.role}`);
       return res.status(201).json({ user: { id: user.id, email: user.email, role: user.role, name: user.name, employee } });
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -2999,7 +2999,7 @@ async function startServer() {
 
       await logAction(req.user.id, "ADMIN_DELETE_USER", `Beheerder heeft account ${targetUser.email} verwijderd`);
       return res.json({ success: true });
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -3055,7 +3055,7 @@ async function startServer() {
 
       await logAction(req.user.id, "ADMIN_UPDATE_USER", `Beheerder heeft account van ${updatedUser.email} bijgewerkt`);
       return res.json({ success: true, user: { id: updatedUser.id, email: updatedUser.email, name: updatedUser.name, role: updatedUser.role } });
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -3068,7 +3068,7 @@ async function startServer() {
     try {
       const list = await prisma.setting.findMany({});
       return res.json(list);
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -3085,7 +3085,7 @@ async function startServer() {
       }
       await logAction(req.user.id, "ADMIN_UPDATE_SETTINGS", "Beheerder heeft e-mail- of systeeminstellingen bijgewerkt");
       return res.json({ success: true });
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -3102,7 +3102,7 @@ async function startServer() {
         },
       });
       return res.json(users);
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -3123,7 +3123,7 @@ async function startServer() {
          <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`
       );
       return res.json({ success: true, message: "Test e-mail verzonden!" });
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
@@ -3149,7 +3149,7 @@ async function startServer() {
 
       await logAction(null, "DB_RESET", "Database is succesvol gereset naar de standaard Nederlandse seeddata");
       return res.json({ success: true, message: "Database is succesvol gereset!" });
-    } catch (err: any) {
+    } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   });
