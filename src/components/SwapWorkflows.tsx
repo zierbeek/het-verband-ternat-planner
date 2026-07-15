@@ -38,8 +38,8 @@ export default function SwapWorkflows({ user, token }: SwapWorkflowsProps) {
       setSwaps(dataSwaps);
       setEmployees(dataEmployees);
 
-      // If user is employee, fetch their current assigned shifts to swap
-      if (user.role === "EMPLOYEE") {
+      // If user is employee or administrator, fetch their current assigned shifts to swap
+      if (user.role === "EMPLOYEE" || user.role === "ADMINISTRATOR") {
         const resShifts = await fetch(`/api/shifts?employeeId=${user.employee?.id}`, { headers });
         const dataShifts = await resShifts.json();
         setShifts(dataShifts);
@@ -180,7 +180,7 @@ export default function SwapWorkflows({ user, token }: SwapWorkflowsProps) {
           </p>
         </div>
 
-        {user.role === "EMPLOYEE" && (
+        {(user.role === "EMPLOYEE" || user.role === "ADMINISTRATOR") && user.employee && (
           <button
             onClick={() => setIsNewSwapOpen(true)}
             className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-xl text-xs font-semibold text-white transition shadow-xs"
