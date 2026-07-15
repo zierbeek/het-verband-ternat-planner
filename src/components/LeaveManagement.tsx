@@ -137,13 +137,13 @@ export default function LeaveManagement({ user, token }: LeaveManagementProps) {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "APPROVED":
-        return <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold px-3 py-1 rounded-full">Goedgekeurd</span>;
+        return <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs sm:text-sm font-bold px-3 py-1 rounded-full">Goedgekeurd</span>;
       case "REJECTED":
-        return <span className="bg-red-50 text-red-700 border border-red-200 text-xs font-bold px-3 py-1 rounded-full">Geweigerd</span>;
+        return <span className="bg-red-50 text-red-700 border border-red-200 text-xs sm:text-sm font-bold px-3 py-1 rounded-full">Geweigerd</span>;
       case "CANCELLED":
-        return <span className="bg-slate-100 text-slate-500 border border-slate-200 text-xs font-bold px-3 py-1 rounded-full">Geannuleerd</span>;
+        return <span className="bg-slate-100 text-slate-500 border border-slate-200 text-xs sm:text-sm font-bold px-3 py-1 rounded-full">Geannuleerd</span>;
       default:
-        return <span className="bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold px-3 py-1 rounded-full animate-pulse">Wacht op goedkeuring</span>;
+        return <span className="bg-amber-50 text-amber-700 border border-amber-200 text-xs sm:text-sm font-bold px-3 py-1 rounded-full animate-pulse">Wacht op goedkeuring</span>;
     }
   };
 
@@ -166,23 +166,23 @@ export default function LeaveManagement({ user, token }: LeaveManagementProps) {
     <div className="space-y-6">
       
       {/* Title / Action bar */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex justify-between items-center">
+      <div className="bg-white p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-200 shadow-xs flex justify-between items-center">
         <div>
           <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <ClipboardList className="h-5 w-5 text-blue-500" />
             Verlof & Afwezigheidsbeheer
           </h2>
-          <p className="text-slate-500 text-xs mt-0.5">
+          <p className="text-slate-500 text-xs sm:text-sm mt-0.5">
             {user.role === "ADMINISTRATOR" 
               ? "Beoordeel, keur goed of weiger verlofaanvragen van medewerkers"
               : "Vraag verlof aan, bekijk uw saldo en volg de goedkeuringsstatus"}
           </p>
         </div>
 
-        {user.role === "EMPLOYEE" && (
+        {(user.role === "EMPLOYEE" || user.role === "ADMINISTRATOR") && user.employee && (
           <button
             onClick={() => setIsNewRequestOpen(true)}
-            className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-xl text-xs font-semibold text-white transition shadow-xs cursor-pointer"
+            className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-xl text-xs sm:text-sm font-semibold text-white transition shadow-xs cursor-pointer"
           >
             <Plus className="h-4 w-4" /> Verlof Aanvragen
           </button>
@@ -190,7 +190,7 @@ export default function LeaveManagement({ user, token }: LeaveManagementProps) {
       </div>
 
       {/* Main Leave Request Grid */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-4">
+      <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 shadow-xs p-6 space-y-4">
         <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">
           {user.role === "ADMINISTRATOR" ? "Alle Verlofaanvragen Medewerkers" : "Uw Verlofaanvragen Geschiedenis"}
         </h3>
@@ -200,13 +200,13 @@ export default function LeaveManagement({ user, token }: LeaveManagementProps) {
             <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-blue-600"></div>
           </div>
         ) : leaves.length === 0 ? (
-          <div className="py-12 text-center text-slate-400 border border-dashed border-slate-200 rounded-2xl bg-slate-50/40 text-sm">
+          <div className="py-12 text-center text-slate-400 border border-dashed border-slate-200 rounded-xl sm:rounded-2xl bg-slate-50/40 text-sm">
             Geen verlofaanvragen geregistreerd.
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {leaves.map((leave) => (
-              <div key={leave.id} className="p-5 border border-slate-200 rounded-2xl bg-slate-50/50 hover:bg-slate-50 transition space-y-4 flex flex-col justify-between shadow-2xs">
+              <div key={leave.id} className="p-3 sm:p-4 border border-slate-200 rounded-xl sm:rounded-2xl bg-slate-50/50 hover:bg-slate-50 transition space-y-4 flex flex-col justify-between shadow-2xs">
                 
                 {/* Header info */}
                 <div className="space-y-2">
@@ -227,33 +227,33 @@ export default function LeaveManagement({ user, token }: LeaveManagementProps) {
                     {getStatusBadge(leave.status)}
                   </div>
 
-                  <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium pt-1.5">
+                  <div className="flex items-center gap-1.5 text-xs sm:text-sm text-slate-500 font-medium pt-1.5">
                     <Calendar className="h-4 w-4 text-slate-400 shrink-0" />
                     <span>{leave.startDate} tot {leave.endDate}</span>
                   </div>
 
                   <div className="p-2.5 bg-white border border-slate-200 rounded-lg">
-                    <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider text-[10px]">Reden</p>
-                    <p className="text-xs text-slate-700 mt-1">{leave.reason}</p>
+                    <p className="text-xs sm:text-sm text-slate-500 font-semibold uppercase tracking-wider text-[10px]">Reden</p>
+                    <p className="text-xs sm:text-sm text-slate-700 mt-1">{leave.reason}</p>
                   </div>
 
                   {leave.comment && (
                     <div className="p-2.5 bg-amber-50/30 border border-amber-100 rounded-lg">
-                      <p className="text-xs text-amber-800 font-semibold uppercase tracking-wider text-[10px]">Opmerking beheerder</p>
-                      <p className="text-xs text-amber-900 mt-1 italic">{leave.comment}</p>
+                      <p className="text-xs sm:text-sm text-amber-800 font-semibold uppercase tracking-wider text-[10px]">Opmerking beheerder</p>
+                      <p className="text-xs sm:text-sm text-amber-900 mt-1 italic">{leave.comment}</p>
                     </div>
                   )}
                 </div>
 
                 {/* Cancel trigger for the requesting employee */}
-                {user.role === "EMPLOYEE" &&
+                {(user.role === "EMPLOYEE" || user.role === "ADMINISTRATOR") &&
                   leave.employeeId === user.employee?.id &&
                   (leave.status === "PENDING" || leave.status === "APPROVED") && (
                     <div className="border-t border-slate-200 pt-3">
                       <button
                         onClick={() => handleCancelRequest(leave.id)}
                         disabled={cancellingId === leave.id}
-                        className="w-full flex justify-center items-center gap-1.5 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-bold rounded-lg transition cursor-pointer disabled:opacity-50"
+                        className="w-full flex justify-center items-center gap-1.5 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs sm:text-sm font-bold rounded-lg transition cursor-pointer disabled:opacity-50"
                       >
                         <X className="h-3.5 w-3.5" /> {cancellingId === leave.id ? "Bezig met annuleren..." : "Aanvraag Annuleren"}
                       </button>
@@ -266,7 +266,7 @@ export default function LeaveManagement({ user, token }: LeaveManagementProps) {
                     <button
                       onClick={() => handleCancelRequest(leave.id)}
                       disabled={cancellingId === leave.id}
-                      className="w-full flex justify-center items-center gap-1.5 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-bold rounded-lg transition cursor-pointer disabled:opacity-50"
+                      className="w-full flex justify-center items-center gap-1.5 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs sm:text-sm font-bold rounded-lg transition cursor-pointer disabled:opacity-50"
                     >
                       <X className="h-3.5 w-3.5" /> {cancellingId === leave.id ? "Bezig met annuleren..." : "Goedkeuring Intrekken"}
                     </button>
@@ -283,7 +283,7 @@ export default function LeaveManagement({ user, token }: LeaveManagementProps) {
                           value={adminComment}
                           onChange={(e) => setAdminComment(e.target.value)}
                           rows={2}
-                          className="w-full text-xs p-2 border border-slate-200 rounded-lg focus:outline-hidden"
+                          className="w-full text-xs sm:text-sm p-2 border border-slate-200 rounded-lg focus:outline-hidden"
                         />
                         <div className="flex gap-1.5 justify-end">
                           <button
@@ -291,13 +291,13 @@ export default function LeaveManagement({ user, token }: LeaveManagementProps) {
                               setSelectedLeaveId(null);
                               setResponseAction(null);
                             }}
-                            className="px-2.5 py-1 text-xs border border-slate-200 hover:bg-slate-50 rounded-md font-semibold text-slate-500 cursor-pointer"
+                            className="px-2.5 py-1 text-xs sm:text-sm border border-slate-200 hover:bg-slate-50 rounded-md font-semibold text-slate-500 cursor-pointer"
                           >
                             Annuleren
                           </button>
                           <button
                             onClick={() => handleResolveRequest(leave.id, responseAction === "approve")}
-                            className={`px-3 py-1 text-xs font-semibold rounded-md text-white cursor-pointer ${
+                            className={`px-3 py-1 text-xs sm:text-sm font-semibold rounded-md text-white cursor-pointer ${
                               responseAction === "approve" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-red-600 hover:bg-red-700"
                             }`}
                           >
@@ -312,7 +312,7 @@ export default function LeaveManagement({ user, token }: LeaveManagementProps) {
                             setSelectedLeaveId(leave.id);
                             setResponseAction("approve");
                           }}
-                          className="flex-1 flex justify-center items-center gap-1.5 py-1.5 border border-emerald-200 hover:bg-emerald-50 text-emerald-700 text-xs font-bold rounded-lg transition cursor-pointer"
+                          className="flex-1 flex justify-center items-center gap-1.5 py-1.5 border border-emerald-200 hover:bg-emerald-50 text-emerald-700 text-xs sm:text-sm font-bold rounded-lg transition cursor-pointer"
                         >
                           <Check className="h-3.5 w-3.5" /> Goedkeuren
                         </button>
@@ -321,7 +321,7 @@ export default function LeaveManagement({ user, token }: LeaveManagementProps) {
                             setSelectedLeaveId(leave.id);
                             setResponseAction("reject");
                           }}
-                          className="flex-1 flex justify-center items-center gap-1.5 py-1.5 border border-red-200 hover:bg-red-50 text-red-700 text-xs font-bold rounded-lg transition cursor-pointer"
+                          className="flex-1 flex justify-center items-center gap-1.5 py-1.5 border border-red-200 hover:bg-red-50 text-red-700 text-xs sm:text-sm font-bold rounded-lg transition cursor-pointer"
                         >
                           <X className="h-3.5 w-3.5" /> Weigeren
                         </button>
@@ -339,12 +339,12 @@ export default function LeaveManagement({ user, token }: LeaveManagementProps) {
       {/* NEW REQUEST MODAL */}
       {isNewRequestOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex justify-center items-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-200">
+          <div className="bg-white rounded-xl sm:rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-200">
             <h3 className="text-lg font-bold text-slate-900">Verlof / Afwezigheid Aanvragen</h3>
             
             <form onSubmit={handleSubmitRequest} className="space-y-3 text-sm text-slate-700">
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">Type Verlof</label>
+                <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-500">Type Verlof</label>
                 <select
                   value={leaveType}
                   onChange={(e) => setLeaveType(e.target.value)}
@@ -359,7 +359,7 @@ export default function LeaveManagement({ user, token }: LeaveManagementProps) {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">Startdatum</label>
+                  <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-500">Startdatum</label>
                   <input
                     type="date"
                     required
@@ -369,7 +369,7 @@ export default function LeaveManagement({ user, token }: LeaveManagementProps) {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">Einddatum</label>
+                  <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-500">Einddatum</label>
                   <input
                     type="date"
                     required
@@ -381,7 +381,7 @@ export default function LeaveManagement({ user, token }: LeaveManagementProps) {
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">Reden / Toelichting</label>
+                <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-500">Reden / Toelichting</label>
                 <textarea
                   required
                   value={reason}

@@ -1,0 +1,188 @@
+/* Mobile Responsiveness & Usability Optimizations */
+/* ==================================================== */
+
+/* Base mobile styles */
+@media (max-width: 767px) {
+  /* Prevent double-tap zoom on input fields */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="date"],
+  textarea,
+  select {
+    font-size: 16px !important;
+    min-height: 44px;
+    padding: 12px 16px;
+  }
+
+  /* Larger touch targets for all buttons */
+  button {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 12px 24px;
+  }
+
+  /* Prevent horizontal scrolling */
+  html, body {
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Better touch feedback */
+  button:active,
+  a:active,
+  .touch-manipulation:active {
+    transform: scale(0.98);
+    opacity: 0.9;
+  }
+
+  /* Disable hover effects on touch devices */
+  @media (hover: none) {
+    button:hover,
+    a:hover,
+    [class*="hover:"] {
+      background-color: transparent !important;
+      color: inherit !important;
+    }
+  }
+
+  /* Make form elements full-width on mobile */
+  .modal-content input,
+  .modal-content select,
+  .modal-content textarea {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Better spacing for mobile forms */
+  .space-y-4 {
+    gap: 1rem;
+  }
+
+  .space-y-2 {
+    gap: 0.5rem;
+  }
+
+  /* Larger icons for mobile */
+  .lucide-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  /* Prevent text selection on UI elements */
+  .no-select,
+  button,
+  [role="button"] {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+
+  /* Better scroll behavior */
+  .overflow-y-auto {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  /* Safe area insets for notched devices */
+  .safe-area-inset-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .safe-area-inset-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .safe-bottom {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 16px);
+  }
+}
+
+/* Small mobile devices (iPhone SE, etc.) */
+@media (max-width: 375px) {
+  /* Even larger touch targets */
+  button {
+    min-height: 48px;
+    padding: 16px 24px;
+    font-size: 16px;
+  }
+
+  /* Simplify layouts */
+  .grid.grid-cols-2 {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Larger text */
+  .text-xs {
+    font-size: 12px;
+  }
+
+  .text-sm {
+    font-size: 14px;
+  }
+
+  /* Hide less important elements */
+  .hidden-mobile {
+    display: none !important;
+  }
+}
+
+/* Tablet optimizations */
+@media (min-width: 768px) and (max-width: 1024px) {
+  /* Adjust grid layouts */
+  .grid.grid-cols-1.sm\:grid-cols-2 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Better spacing */
+  .p-3.sm\:p-4 {
+    padding: 1rem;
+  }
+}
+
+/* Touch-specific styles */
+.touch-none {
+  touch-action: none;
+}
+
+.touch-manipulation {
+  touch-action: manipulation;
+}
+
+.touch-pan-x {
+  touch-action: pan-x;
+}
+
+.touch-pan-y {
+  touch-action: pan-y;
+}
+
+/* Focus styles for accessibility */
+:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+/* Prevent focus outline on touch */
+@media (hover: none) {
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+}
+
+/* Smooth transitions for better UX */
+* {
+  transition: all 0.2s ease;
+}
+
+/* Disable animations on reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

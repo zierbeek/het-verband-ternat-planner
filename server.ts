@@ -377,8 +377,21 @@ async function startServer() {
         return res.status(401).json({ error: "Invalid email or password" });
       }
 
+      // Check if this is the default admin account that needs password change
+      // Only allow default admin login if password is still the default
+      const isDefaultAdmin = user.email === "admin@planner.com" && password === "admin123";
+      const requiresPasswordChange = isDefaultAdmin;
+      
+      // If someone tries to login with default admin credentials but password was already changed,
+      // reject the login for security
+      if (user.email === "admin@planner.com" && password === "admin123" && !isDefaultAdmin) {
+        return res.status(401).json({ 
+          error: "Default admin password has been changed. Please use your new credentials or contact an administrator." 
+        });
+      }
+
       const token = generateToken(user);
-      await logAction(user.id, "USER_LOGIN", `User logged in successfully`);
+      await logAction(user.id, "USER_LOGIN", `User logged in successfully${isDefaultAdmin ? " (default admin, password change required)" : ""}`);
 
       return res.json({
         token,
@@ -389,6 +402,7 @@ async function startServer() {
           name: user.name,
           employee: user.employee,
         },
+        requiresPasswordChange,
       });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
@@ -1577,6 +1591,11 @@ async function startServer() {
       });
       if (!leave) return res.status(404).json({ error: "Leave request not found" });
 
+
+      // A beheerder cannot approve their own leave request
+      if (leave.employee.userId === req.user.id) {
+        return res.status(403).json({ error: "U kunt uw eigen verlofaanvraag niet goedkeuren. Vraag een andere beheerder om dit te doen." });
+      }
       // Only one administrator needs to approve a leave request. If another
       // administrator already resolved it (approved, rejected or cancelled),
       // don't let a second approval silently overwrite that decision.
@@ -1643,6 +1662,11 @@ async function startServer() {
       });
       if (!leave) return res.status(404).json({ error: "Leave request not found" });
 
+
+      // A beheerder cannot reject their own leave request
+      if (leave.employee.userId === req.user.id) {
+        return res.status(403).json({ error: "U kunt uw eigen verlofaanvraag niet weigeren. Vraag een andere beheerder om dit te doen." });
+      }
       // Only one administrator needs to decide on a leave request. If another
       // administrator already resolved it, don't silently overwrite that.
       if (leave.status !== "PENDING") {
@@ -2248,6 +2272,10 @@ async function startServer() {
         return res.status(409).json({
           error: `Deze ruil is al ${swap.status === "APPROVED_ADMIN" ? "goedgekeurd" : "geweigerd"} door een andere beheerder.`,
         });
+
+      // A beheerder cannot approve or reject their own swap request
+      if (swap.requester.userId === req.user.id || swap.target.userId === req.user.id) {
+        return res.status(403).json({ error: "U kunt een ruilaanvraag waarbij u betrokken bent niet zelf goedkeuren of weigeren. Vraag een andere beheerder om dit te doen." });
       }
 
       if (status === "APPROVED_ADMIN" && swap.status !== "ACCEPTED_TARGET") {

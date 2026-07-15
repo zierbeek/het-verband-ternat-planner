@@ -19,6 +19,7 @@ import LeaveManagement from "./components/LeaveManagement.tsx";
 import SwapWorkflows from "./components/SwapWorkflows.tsx";
 import AdminPanel from "./components/AdminPanel.tsx";
 import FirstTimeGuide from "./components/FirstTimeGuide.tsx";
+import PasswordChangeModal from "./components/PasswordChangeModal.tsx";
 import { getUserColorStyle } from "./utils/userColor.ts";
 
 export default function App() {
@@ -42,6 +43,11 @@ export default function App() {
       if (res.ok) {
         const userData = await res.json();
         setUser(userData);
+        // Check if password change is required
+        if (userData.requiresPasswordChange) {
+          setRequiresPasswordChange(true);
+          setShowPasswordModal(true);
+        }
       } else {
         handleLogout();
       }
@@ -143,11 +149,11 @@ export default function App() {
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       
       {/* Upper Navigation Header */}
-      <header className="bg-white border-b border-slate-200 h-16 shrink-0 flex justify-between items-center px-4 sm:px-6 sticky top-0 z-40 shadow-xs">
+      <header className="bg-white border-b border-slate-200 h-16 shrink-0 flex justify-between items-center px-4 sm:px-6 sticky top-0 z-40 shadow-xs touch-none">
         <div className="flex items-center gap-3">
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="p-1.5 hover:bg-slate-50 rounded-lg text-slate-600 md:hidden transition"
+            className="p-2 hover:bg-slate-50 rounded-lg text-slate-600 md:hidden transition active:bg-slate-100"
           >
             {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
@@ -186,7 +192,7 @@ export default function App() {
       </header>
 
       {/* Main layout frame */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden safe-area-inset-top">
         
         {/* Sidebar Left Navigation - Desktop */}
         <aside className="hidden md:flex flex-col w-64 bg-slate-900 p-4 space-y-1.5 shrink-0">
@@ -197,7 +203,7 @@ export default function App() {
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all ${
+                className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold transition-all touch-manipulation ${
                   isActive
                     ? "bg-slate-800 text-white shadow-xs"
                     : "text-slate-400 hover:bg-slate-800/60 hover:text-white"
@@ -217,7 +223,7 @@ export default function App() {
 
         {/* Slide-out Sidebar - Mobile */}
         {isMobileMenuOpen && (
-          <div className="fixed inset-0 z-50 md:hidden flex">
+          <div className="fixed inset-0 z-50 md:hidden flex touch-none">
             <div className="fixed inset-0 bg-black/40 backdrop-blur-xs" onClick={() => setIsMobileMenuOpen(false)} />
             <aside className="relative flex flex-col w-64 bg-slate-900 h-full p-4 space-y-1.5 shadow-xl animate-slide-in">
               <div className="flex justify-between items-center mb-6 px-2">
@@ -240,7 +246,7 @@ export default function App() {
                       setActiveTab(item.id);
                       setIsMobileMenuOpen(false);
                     }}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all ${
+                    className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold transition-all touch-manipulation ${
                       isActive
                         ? "bg-slate-800 text-white shadow-xs"
                         : "text-slate-400 hover:bg-slate-800/60 hover:text-white"
@@ -261,7 +267,7 @@ export default function App() {
         )}
 
         {/* Content Frame */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 pb-28 md:pb-6">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 pb-24 md:pb-6 safe-area-inset-bottom">
           {activeTab === "dashboard" && <Dashboard user={user} token={token} />}
           {activeTab === "calendar" && <ShiftCalendar user={user} token={token} />}
           {activeTab === "leave" && <LeaveManagement user={user} token={token} />}
@@ -280,7 +286,7 @@ export default function App() {
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className={`flex flex-col items-center justify-center flex-1 h-full py-1 transition-all relative ${
+              className={`flex flex-col items-center justify-center flex-1 h-full py-2 transition-all relative active:scale-95 ${
                 isActive ? "text-blue-600 font-extrabold" : "text-slate-400 hover:text-slate-600"
               }`}
             >

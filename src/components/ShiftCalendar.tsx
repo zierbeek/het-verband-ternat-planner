@@ -689,7 +689,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                 year: "numeric",
               })}
             </h2>
-            <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden ml-4">
+            <div className="flex items-center border border-slate-200 rounded-lg sm:rounded-xl overflow-hidden ml-4">
               <button
                 onClick={prevDate}
                 className="p-1.5 hover:bg-slate-50 border-r border-slate-200 text-slate-600 transition cursor-pointer"
@@ -698,7 +698,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
               </button>
               <button
                 onClick={() => setCurrentDate(new Date())}
-                className="px-3 py-1 text-xs font-semibold hover:bg-slate-50 border-r border-slate-200 text-slate-700 transition cursor-pointer"
+                className="px-3 py-1 text-xs sm:text-sm font-semibold hover:bg-slate-50 border-r border-slate-200 text-slate-700 transition cursor-pointer"
               >
                 Vandaag
               </button>
@@ -713,7 +713,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
 
           <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
             {/* View Switcher */}
-            <div className="flex rounded-lg bg-slate-100 p-1">
+            <div className="flex rounded-lg sm:rounded-xl bg-slate-100 p-1">
               {[
                 { view: "month", label: "Maand" },
                 { view: "week", label: "Week" },
@@ -722,7 +722,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                 <button
                   key={view}
                   onClick={() => setViewType(view as any)}
-                  className={`px-3 py-1 text-xs font-bold rounded-md transition cursor-pointer ${
+                  className={`px-3 py-1 text-xs sm:text-sm font-bold rounded-md transition cursor-pointer ${
                     viewType === view
                       ? "bg-white text-blue-600 shadow-xs"
                       : "text-slate-600 hover:text-slate-900"
@@ -734,7 +734,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
             </div>
 
             {/* Filter by Staff */}
-            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-700">
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl px-2 py-1.5 text-xs sm:text-sm text-slate-700">
               <Filter className="h-3.5 w-3.5 text-slate-400" />
               <select
                 value={selectedEmployeeFilter}
@@ -759,7 +759,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                   setIsPrintMode(false);
                 }, 500);
               }}
-              className="p-2 border border-slate-200 hover:bg-slate-50 rounded-lg text-slate-600 transition cursor-pointer"
+              className="p-2 border border-slate-200 hover:bg-slate-50 rounded-lg sm:rounded-xl text-slate-600 transition cursor-pointer"
               title="Afdrukken"
             >
               <Printer className="h-4 w-4" />
@@ -770,7 +770,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
               <>
                 <button
                   onClick={() => setIsCopyWeekOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 hover:bg-slate-50 rounded-lg text-xs font-semibold text-slate-700 transition cursor-pointer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 hover:bg-slate-50 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold text-slate-700 transition cursor-pointer"
                 >
                   <Copy className="h-3.5 w-3.5" /> Week Kopiëren
                 </button>
@@ -779,7 +779,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                     setShiftDate(currentDate.toISOString().split("T")[0]);
                     setIsCreateModalOpen(true);
                   }}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 rounded-lg text-xs font-semibold text-white transition shadow-xs cursor-pointer"
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold text-white transition shadow-xs cursor-pointer"
                 >
                   <Plus className="h-4 w-4" /> Shift Aanmaken
                 </button>
@@ -795,7 +795,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
         {/* Month View */}
         {viewType === "month" && (
           <div>
-            <div className="grid grid-cols-7 bg-slate-50/70 border-b border-slate-200 py-3 text-center text-xs font-bold text-slate-500 uppercase tracking-wider">
+            <div className="grid grid-cols-7 bg-slate-50/70 border-b border-slate-200 py-3 text-center text-xs sm:text-sm font-bold text-slate-500 uppercase tracking-wider">
               {["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"].map((day) => (
                 <div key={day}>{day}</div>
               ))}
@@ -812,7 +812,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                       isCurrentMonth ? "bg-white" : "bg-slate-50/40 text-slate-400"
                     }`}
                   >
-                    <span className="text-xs font-bold text-slate-700">
+                    <span className="text-xs sm:text-sm font-bold text-slate-700">
                       {date.getDate()}
                     </span>
                     <div className="space-y-1 overflow-y-auto max-h-[85px]">
@@ -861,10 +861,10 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
           <div>
             {user.role === "ADMINISTRATOR" && !isPrintMode && (
               <div className="p-4 bg-slate-900 text-white border-b border-slate-800">
-                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2.5 sm:p-3">
                   <div>
                     <h3 className="text-sm font-bold tracking-tight">Snelle planning</h3>
-                    <p className="text-xs text-slate-300 mt-0.5">
+                    <p className="text-xs sm:text-sm text-slate-300 mt-0.5">
                       Sleep een preset naar een dagdeel, of versleep een bestaande shift naar een ander vak of een andere dag.
                       Houd Ctrl (of Cmd) ingedrukt tijdens het slepen om de shift te kopiëren in plaats van te verplaatsen.
                     </p>
@@ -877,7 +877,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                         draggable
                         onDragStart={() => setDraggedItem({ type: "template", presetId: preset.id })}
                         onDragEnd={() => setDraggedItem(null)}
-                        className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-white/10 hover:bg-white/15 text-xs font-bold transition cursor-grab active:cursor-grabbing"
+                        className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-white/10 hover:bg-white/15 text-xs sm:text-sm font-bold transition cursor-grab active:cursor-grabbing"
                         title={`${preset.startTime} - ${preset.endTime}`}
                       >
                         <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: preset.color }} />
@@ -887,7 +887,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                     <button
                       type="button"
                       onClick={() => setIsPresetsModalOpen(true)}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-dashed border-white/20 hover:bg-white/10 text-xs font-bold transition cursor-pointer text-slate-200"
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-dashed border-white/20 hover:bg-white/10 text-xs sm:text-sm font-bold transition cursor-pointer text-slate-200"
                     >
                       <Settings className="h-3.5 w-3.5" /> Presets beheren
                     </button>
@@ -899,7 +899,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
             <div className="grid grid-cols-7 bg-slate-50/70 border-b border-slate-200 py-3.5 text-center">
               {weekDates.map((date, idx) => (
                 <div key={idx} className="space-y-1">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                  <span className="text-xs sm:text-sm font-bold text-slate-400 uppercase tracking-wider">
                     {date.toLocaleDateString("nl-BE", { weekday: "short" })}
                   </span>
                   <p className="text-lg font-extrabold text-slate-800">
@@ -946,14 +946,14 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
 
                           <div className="space-y-1.5 flex-1">
                             {slot.shifts.length === 0 ? (
-                              <div className="text-[10px] text-slate-300 italic border border-dashed border-slate-200 rounded-lg px-2 py-3 text-center">
+                              <div className="text-[10px] text-slate-300 italic border border-dashed border-slate-200 rounded-lg sm:rounded-xl px-2 py-3 text-center">
                                 Sleep een shift of template hier
                               </div>
                             ) : (
                               slot.shifts.map((shift) => (
                                 <div
                                   key={shift.id}
-                                  draggable={user.role === "ADMINISTRATOR"}
+                                  draggable={user.role === "ADMINISTRATOR" && window.innerWidth > 768}
                                   onDragStart={() => setDraggedItem({ type: "shift", shiftId: shift.id })}
                                   onDragEnd={() => setDraggedItem(null)}
                                   onClick={() => {
@@ -1032,7 +1032,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
             </h3>
 
             {user.role === "ADMINISTRATOR" && !isPrintMode && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 sm:p-3 mb-5">
                 {(Object.keys(slotPresets) as PlannerSlot[]).map((slot) => {
                   const config = slotPresets[slot];
                   const slotKey = `${currentDate.toISOString().split("T")[0]}-${slot}`;
@@ -1063,7 +1063,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
 
                       <div className="space-y-2 min-h-[110px]">
                         {slotShifts.length === 0 ? (
-                          <div className="text-[10px] italic text-slate-400 border border-dashed border-slate-200 rounded-lg px-3 py-6 text-center bg-white/70">
+                          <div className="text-[10px] italic text-slate-400 border border-dashed border-slate-200 rounded-lg sm:rounded-xl px-3 py-6 text-center bg-white/70">
                             Nog geen shift in dit dagdeel
                           </div>
                         ) : (
@@ -1077,9 +1077,9 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                                 openShiftEditor(shift);
                               }}
                               style={{ borderLeftColor: shift.color }}
-                              className="p-3 border-l-4 rounded-r-xl bg-white border border-slate-200 shadow-2xs cursor-pointer"
+                              className="p-2.5 sm:p-3 border-l-4 rounded-r-xl bg-white border border-slate-200 shadow-2xs cursor-pointer"
                             >
-                              <div className="font-bold text-slate-800 text-xs truncate">{shift.name}</div>
+                              <div className="font-bold text-slate-800 text-xs sm:text-sm truncate">{shift.name}</div>
                               <div className="text-[10px] text-slate-500 mt-0.5">
                                 {shift.startTime} - {shift.endTime}
                               </div>
@@ -1112,7 +1112,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                   >
                     <div>
                       <h4 className="font-bold text-slate-800 text-sm">{shift.name}</h4>
-                      <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
+                      <div className="flex items-center gap-2.5 sm:p-3 text-xs sm:text-sm text-slate-500 mt-1">
                         <span className="flex items-center gap-1 font-mono">
                           <Clock className="h-3.5 w-3.5 text-slate-400" /> {shift.startTime} - {shift.endTime}
                         </span>
@@ -1122,7 +1122,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                         </span>
                       </div>
                       {shift.notes && (
-                        <p className="text-xs text-slate-500 mt-2 italic font-mono bg-white p-1.5 rounded border border-slate-200">
+                        <p className="text-xs sm:text-sm text-slate-500 mt-2 italic font-mono bg-white p-1.5 rounded border border-slate-200">
                           Opmerkingen: {shift.notes}
                         </p>
                       )}
@@ -1134,13 +1134,13 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                           <span
                             key={assign.id}
                             style={getEmployeeBadgeStyle(assign.employeeId)}
-                            className="text-xs font-semibold px-2.5 py-1 rounded-full border flex items-center gap-1.5"
+                            className="text-xs sm:text-sm font-semibold px-2.5 py-1 rounded-full border flex items-center gap-1.5"
                           >
                             <User className="h-3.5 w-3.5" /> {assign.employee.user.name}
                           </span>
                         ))
                       ) : (
-                        <span className="text-red-500 text-xs font-semibold bg-red-50 border border-red-100 px-3 py-1 rounded-full">
+                        <span className="text-red-500 text-xs sm:text-sm font-semibold bg-red-50 border border-red-100 px-3 py-1 rounded-full">
                           Onbezet
                         </span>
                       )}
@@ -1162,7 +1162,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
             
             <form onSubmit={handleCreateShift} className="space-y-3 text-sm text-slate-700">
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">Dienst / Type Shift</label>
+                <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-500">Dienst / Type Shift</label>
                 <select
                   value={shiftName}
                   onChange={(e) => {
@@ -1176,7 +1176,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                       setAssignEmployeeId(matchedPreset.defaultEmployeeId || "");
                     }
                   }}
-                  className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg font-medium"
+                  className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg sm:rounded-xl font-medium"
                 >
                   {sortedPresets.map((preset) => (
                     <option key={preset.id} value={preset.label}>
@@ -1190,48 +1190,48 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2.5 sm:p-3">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">Starttijd</label>
+                  <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-500">Starttijd</label>
                   <input
                     type="text"
                     required
                     value={startTime}
                     onChange={(e) => setStartTime(e.target.value)}
                     placeholder="07:00"
-                    className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg font-mono text-center"
+                    className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg sm:rounded-xl font-mono text-center"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">Eindtijd</label>
+                  <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-500">Eindtijd</label>
                   <input
                     type="text"
                     required
                     value={endTime}
                     onChange={(e) => setEndTime(e.target.value)}
                     placeholder="15:00"
-                    className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg font-mono text-center"
+                    className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg sm:rounded-xl font-mono text-center"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">Datum</label>
+                <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-500">Datum</label>
                 <input
                   type="date"
                   required
                   value={shiftDate}
                   onChange={(e) => setShiftDate(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg"
+                  className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg sm:rounded-xl"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">Direct toewijzen aan</label>
+                <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-500">Direct toewijzen aan</label>
                 <select
                   value={assignEmployeeId}
                   onChange={(e) => setAssignEmployeeId(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg font-medium"
+                  className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg sm:rounded-xl font-medium"
                 >
                   <option value="">-- Nog niet toewijzen --</option>
                   {employees.map((emp) => (
@@ -1242,36 +1242,36 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2.5 sm:p-3">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">Kleur Label</label>
+                  <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-500">Kleur Label</label>
                   <input
                     type="color"
                     value={shiftColor}
                     onChange={(e) => setShiftColor(e.target.value)}
-                    className="mt-1 block w-full h-10 p-1 border border-slate-300 rounded-lg cursor-pointer"
+                    className="mt-1 block w-full h-10 p-1 border border-slate-300 rounded-lg sm:rounded-xl cursor-pointer"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">Vereist Personeel</label>
+                  <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-500">Vereist Personeel</label>
                   <input
                     type="number"
                     min="1"
                     value={requiredEmployees}
                     onChange={(e) => setRequiredEmployees(Number(e.target.value))}
-                    className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg"
+                    className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg sm:rounded-xl"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">Opmerkingen / Instructies</label>
+                <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-500">Opmerkingen / Instructies</label>
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   rows={2}
                   placeholder="Bijv. speciale ICU-verpleging vereist"
-                  className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg resize-none"
+                  className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg sm:rounded-xl resize-none"
                 />
               </div>
 
@@ -1279,13 +1279,13 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                 <button
                   type="button"
                   onClick={() => setIsCreateModalOpen(false)}
-                  className="px-4 py-2 border border-slate-200 hover:bg-slate-50 rounded-lg font-semibold text-slate-600 transition cursor-pointer"
+                  className="px-4 py-2 border border-slate-200 hover:bg-slate-50 rounded-lg sm:rounded-xl font-semibold text-slate-600 transition cursor-pointer"
                 >
                   Annuleren
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold text-white transition shadow-xs cursor-pointer"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg sm:rounded-xl font-semibold text-white transition shadow-xs cursor-pointer"
                 >
                   Shift Aanmaken
                 </button>
@@ -1302,18 +1302,18 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
             <h3 className="text-lg font-bold text-slate-900">Shift Beheren</h3>
             
             <div className="space-y-3 text-sm text-slate-700">
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <div className="p-2.5 sm:p-3 bg-slate-50 rounded-xl border border-slate-200">
                 <p className="font-bold text-slate-800">{selectedShift.name}</p>
-                <p className="text-xs text-slate-500 mt-1">Datum: {selectedShift.date}</p>
-                <p className="text-xs text-slate-500">Tijd: {selectedShift.startTime} - {selectedShift.endTime}</p>
+                <p className="text-xs sm:text-sm text-slate-500 mt-1">Datum: {selectedShift.date}</p>
+                <p className="text-xs sm:text-sm text-slate-500">Tijd: {selectedShift.startTime} - {selectedShift.endTime}</p>
               </div>
 
-              <div className="p-3 bg-blue-50 rounded-xl border border-blue-100 space-y-2">
-                <label className="block text-xs font-bold uppercase tracking-wider text-blue-700">Medewerker toewijzen</label>
+              <div className="p-2.5 sm:p-3 bg-blue-50 rounded-xl border border-blue-100 space-y-2">
+                <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-blue-700">Medewerker toewijzen</label>
                 <select
                   value={editEmployeeId}
                   onChange={(e) => setEditEmployeeId(e.target.value)}
-                  className="w-full px-3 py-2 border border-blue-200 rounded-lg bg-white text-sm"
+                  className="w-full px-3 py-2 border border-blue-200 rounded-lg sm:rounded-xl bg-white text-sm"
                 >
                   <option value="">-- Shift onbezet laten --</option>
                   {employees.map((emp) => (
@@ -1325,7 +1325,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                 <button
                   type="button"
                   onClick={handleSaveAssignment}
-                  className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs transition"
+                  className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg sm:rounded-xl font-bold text-xs sm:text-sm transition"
                 >
                   Toewijzing opslaan
                 </button>
@@ -1335,25 +1335,25 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                 <button
                   type="button"
                   onClick={() => setIsDeleteConfirmOpen(true)}
-                  className="w-full flex justify-center py-2 border border-red-200 hover:bg-red-50 text-red-600 font-semibold rounded-lg transition cursor-pointer"
+                  className="w-full flex justify-center py-2 border border-red-200 hover:bg-red-50 text-red-600 font-semibold rounded-lg sm:rounded-xl transition cursor-pointer"
                 >
                   Shift Verwijderen
                 </button>
               ) : (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-xl space-y-2 text-center">
-                  <p className="text-xs text-red-800 font-semibold">Weet u zeker dat u deze shift wilt verwijderen?</p>
+                <div className="p-2.5 sm:p-3 bg-red-50 border border-red-200 rounded-xl space-y-2 text-center">
+                  <p className="text-xs sm:text-sm text-red-800 font-semibold">Weet u zeker dat u deze shift wilt verwijderen?</p>
                   <div className="flex gap-2 justify-center">
                     <button
                       type="button"
                       onClick={() => handleDeleteShift(selectedShift.id)}
-                      className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg transition cursor-pointer"
+                      className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm font-bold rounded-lg sm:rounded-xl transition cursor-pointer"
                     >
                       Ja, verwijder
                     </button>
                     <button
                       type="button"
                       onClick={() => setIsDeleteConfirmOpen(false)}
-                      className="px-3 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold rounded-lg transition cursor-pointer"
+                      className="px-3 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs sm:text-sm font-bold rounded-lg sm:rounded-xl transition cursor-pointer"
                     >
                       Annuleer
                     </button>
@@ -1365,7 +1365,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                 <button
                   type="button"
                   onClick={() => setIsEditModalOpen(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-semibold transition cursor-pointer"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg sm:rounded-xl font-semibold transition cursor-pointer"
                 >
                   Sluiten
                 </button>
@@ -1384,7 +1384,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
             </h3>
 
             {/* Tab switchers */}
-            <div className="flex rounded-lg bg-slate-100 p-1">
+            <div className="flex rounded-lg sm:rounded-xl bg-slate-100 p-1">
               {[
                 { mode: "week", label: "Week Kopiëren" },
                 { mode: "repeat", label: "Week Herhalen" },
@@ -1394,7 +1394,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                   key={mode}
                   type="button"
                   onClick={() => setCopyMode(mode as any)}
-                  className={`flex-1 py-1.5 text-xs font-bold rounded-md transition cursor-pointer ${
+                  className={`flex-1 py-1.5 text-xs sm:text-sm font-bold rounded-md transition cursor-pointer ${
                     copyMode === mode
                       ? "bg-white text-blue-600 shadow-xs"
                       : "text-slate-600 hover:text-slate-900"
@@ -1409,23 +1409,23 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
               {copyMode === "week" && (
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">Startdatum bronweek (Ma)</label>
+                    <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-500">Startdatum bronweek (Ma)</label>
                     <input
                       type="date"
                       required
                       value={sourceWeekStart}
                       onChange={(e) => setSourceWeekStart(e.target.value)}
-                      className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg"
+                      className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg sm:rounded-xl"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">Startdatum doelweek (Ma)</label>
+                    <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-500">Startdatum doelweek (Ma)</label>
                     <input
                       type="date"
                       required
                       value={targetWeekStart}
                       onChange={(e) => setTargetWeekStart(e.target.value)}
-                      className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg"
+                      className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg sm:rounded-xl"
                     />
                   </div>
                 </div>
@@ -1434,21 +1434,21 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
               {copyMode === "repeat" && (
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">Startdatum bronweek (Ma)</label>
+                    <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-500">Startdatum bronweek (Ma)</label>
                     <input
                       type="date"
                       required
                       value={sourceWeekStart}
                       onChange={(e) => setSourceWeekStart(e.target.value)}
-                      className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg"
+                      className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg sm:rounded-xl"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">Aantal weken herhalen (Lange termijn)</label>
+                    <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-500">Aantal weken herhalen (Lange termijn)</label>
                     <select
                       value={repeatWeeksCount}
                       onChange={(e) => setRepeatWeeksCount(Number(e.target.value))}
-                      className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg"
+                      className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg sm:rounded-xl"
                     >
                       <option value="1">1 week</option>
                       <option value="2">2 weken</option>
@@ -1466,25 +1466,25 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
               {copyMode === "month" && (
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">Bronmaand</label>
+                    <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-500">Bronmaand</label>
                     <input
                       type="month"
                       required
                       placeholder="YYYY-MM"
                       value={sourceMonth}
                       onChange={(e) => setSourceMonth(e.target.value)}
-                      className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg"
+                      className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg sm:rounded-xl"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">Doelmaand</label>
+                    <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-500">Doelmaand</label>
                     <input
                       type="month"
                       required
                       placeholder="YYYY-MM"
                       value={targetMonth}
                       onChange={(e) => setTargetMonth(e.target.value)}
-                      className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg"
+                      className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg sm:rounded-xl"
                     />
                   </div>
                 </div>
@@ -1499,7 +1499,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                   onChange={(e) => setCopyEmployees(e.target.checked)}
                   className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4 cursor-pointer"
                 />
-                <label htmlFor="copyEmployees" className="text-xs font-medium text-slate-600 cursor-pointer select-none">
+                <label htmlFor="copyEmployees" className="text-xs sm:text-sm font-medium text-slate-600 cursor-pointer select-none">
                   Inclusief toegewezen medewerkers kopiëren
                 </label>
               </div>
@@ -1508,13 +1508,13 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                 <button
                   type="button"
                   onClick={() => setIsCopyWeekOpen(false)}
-                  className="px-4 py-2 border border-slate-200 hover:bg-slate-50 rounded-lg font-semibold text-slate-600 transition cursor-pointer"
+                  className="px-4 py-2 border border-slate-200 hover:bg-slate-50 rounded-lg sm:rounded-xl font-semibold text-slate-600 transition cursor-pointer"
                 >
                   Annuleren
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold text-white transition shadow-xs cursor-pointer"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg sm:rounded-xl font-semibold text-white transition shadow-xs cursor-pointer"
                 >
                   {copyMode === "week" ? "Week Kopiëren" : copyMode === "repeat" ? "Lange Termijn Herhalen" : "Maand Kopiëren"}
                 </button>
@@ -1542,7 +1542,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs sm:text-sm text-slate-500">
               Deze presets verschijnen als sleepbare snelkeuzes bij "Snelle planning" en in de lijst van de "Nieuwe Shift"-modal.
               De eerste twee (op volgorde) bepalen ook de twee kolommen in de week- en dagweergave.
               Stel je een standaard medewerker in, dan wordt die automatisch toegewezen zodra de preset gebruikt wordt
@@ -1551,17 +1551,17 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
 
             <div className="space-y-2">
               {sortedPresets.length === 0 && (
-                <p className="text-xs text-slate-400 italic">Nog geen presets. Voeg er hieronder een toe.</p>
+                <p className="text-xs sm:text-sm text-slate-400 italic">Nog geen presets. Voeg er hieronder een toe.</p>
               )}
               {sortedPresets.map((preset) => (
-                <div key={preset.id} className="border border-slate-200 rounded-xl p-3">
+                <div key={preset.id} className="border border-slate-200 rounded-xl p-2.5 sm:p-3">
                   {editingPresetId === preset.id && editPresetDraft ? (
                     <div className="space-y-2">
                       <input
                         type="text"
                         value={editPresetDraft.label}
                         onChange={(e) => setEditPresetDraft({ ...editPresetDraft, label: e.target.value })}
-                        className="block w-full px-3 py-1.5 border border-slate-300 rounded-lg text-sm font-medium"
+                        className="block w-full px-3 py-1.5 border border-slate-300 rounded-lg sm:rounded-xl text-sm font-medium"
                         placeholder="Naam"
                       />
                       <div className="grid grid-cols-3 gap-2">
@@ -1569,21 +1569,21 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                           type="text"
                           value={editPresetDraft.startTime}
                           onChange={(e) => setEditPresetDraft({ ...editPresetDraft, startTime: e.target.value })}
-                          className="px-2 py-1.5 border border-slate-300 rounded-lg text-xs font-mono text-center"
+                          className="px-2 py-1.5 border border-slate-300 rounded-lg sm:rounded-xl text-xs sm:text-sm font-mono text-center"
                           placeholder="07:00"
                         />
                         <input
                           type="text"
                           value={editPresetDraft.endTime}
                           onChange={(e) => setEditPresetDraft({ ...editPresetDraft, endTime: e.target.value })}
-                          className="px-2 py-1.5 border border-slate-300 rounded-lg text-xs font-mono text-center"
+                          className="px-2 py-1.5 border border-slate-300 rounded-lg sm:rounded-xl text-xs sm:text-sm font-mono text-center"
                           placeholder="15:00"
                         />
                         <input
                           type="color"
                           value={editPresetDraft.color}
                           onChange={(e) => setEditPresetDraft({ ...editPresetDraft, color: e.target.value })}
-                          className="h-8 w-full p-1 border border-slate-300 rounded-lg cursor-pointer"
+                          className="h-8 w-full p-1 border border-slate-300 rounded-lg sm:rounded-xl cursor-pointer"
                         />
                       </div>
                       <div>
@@ -1593,7 +1593,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                         <select
                           value={editPresetDraft.defaultEmployeeId}
                           onChange={(e) => setEditPresetDraft({ ...editPresetDraft, defaultEmployeeId: e.target.value })}
-                          className="block w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs font-medium"
+                          className="block w-full px-2 py-1.5 border border-slate-300 rounded-lg sm:rounded-xl text-xs sm:text-sm font-medium"
                         >
                           <option value="">-- Geen, telkens handmatig kiezen --</option>
                           {employees.map((emp) => (
@@ -1610,14 +1610,14 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                             setEditingPresetId(null);
                             setEditPresetDraft(null);
                           }}
-                          className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 rounded-lg font-semibold text-slate-600 text-xs transition cursor-pointer"
+                          className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 rounded-lg sm:rounded-xl font-semibold text-slate-600 text-xs sm:text-sm transition cursor-pointer"
                         >
                           Annuleren
                         </button>
                         <button
                           type="button"
                           onClick={() => handleSavePreset(preset.id)}
-                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold text-white text-xs transition cursor-pointer"
+                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded-lg sm:rounded-xl font-semibold text-white text-xs sm:text-sm transition cursor-pointer"
                         >
                           Opslaan
                         </button>
@@ -1641,7 +1641,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                         <button
                           type="button"
                           onClick={() => startEditingPreset(preset)}
-                          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition cursor-pointer"
+                          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg sm:rounded-xl transition cursor-pointer"
                           title="Naam/tijd/kleur wijzigen"
                         >
                           <Pencil className="h-3.5 w-3.5" />
@@ -1649,7 +1649,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                         <button
                           type="button"
                           onClick={() => handleDeletePreset(preset.id)}
-                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg sm:rounded-xl transition cursor-pointer"
                           title="Preset verwijderen"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -1662,14 +1662,14 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
             </div>
 
             <form onSubmit={handleCreatePreset} className="border-t border-slate-200 pt-4 space-y-2">
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">Nieuwe Preset Toevoegen</label>
+              <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-500">Nieuwe Preset Toevoegen</label>
               <input
                 type="text"
                 required
                 value={newPresetLabel}
                 onChange={(e) => setNewPresetLabel(e.target.value)}
                 placeholder="Bijv. Nachtdienst"
-                className="block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                className="block w-full px-3 py-2 border border-slate-300 rounded-lg sm:rounded-xl text-sm"
               />
               <div className="grid grid-cols-3 gap-2">
                 <input
@@ -1678,7 +1678,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                   value={newPresetStart}
                   onChange={(e) => setNewPresetStart(e.target.value)}
                   placeholder="22:00"
-                  className="px-2 py-2 border border-slate-300 rounded-lg text-xs font-mono text-center"
+                  className="px-2 py-2 border border-slate-300 rounded-lg sm:rounded-xl text-xs sm:text-sm font-mono text-center"
                 />
                 <input
                   type="text"
@@ -1686,13 +1686,13 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                   value={newPresetEnd}
                   onChange={(e) => setNewPresetEnd(e.target.value)}
                   placeholder="06:00"
-                  className="px-2 py-2 border border-slate-300 rounded-lg text-xs font-mono text-center"
+                  className="px-2 py-2 border border-slate-300 rounded-lg sm:rounded-xl text-xs sm:text-sm font-mono text-center"
                 />
                 <input
                   type="color"
                   value={newPresetColor}
                   onChange={(e) => setNewPresetColor(e.target.value)}
-                  className="h-9 w-full p-1 border border-slate-300 rounded-lg cursor-pointer"
+                  className="h-9 w-full p-1 border border-slate-300 rounded-lg sm:rounded-xl cursor-pointer"
                 />
               </div>
               <div>
@@ -1702,7 +1702,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                 <select
                   value={newPresetDefaultEmployeeId}
                   onChange={(e) => setNewPresetDefaultEmployeeId(e.target.value)}
-                  className="block w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                  className="block w-full px-3 py-2 border border-slate-300 rounded-lg sm:rounded-xl text-sm"
                 >
                   <option value="">-- Geen, telkens handmatig kiezen --</option>
                   {employees.map((emp) => (
@@ -1714,7 +1714,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
               </div>
               <button
                 type="submit"
-                className="w-full flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold text-white text-sm transition shadow-xs cursor-pointer"
+                className="w-full flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg sm:rounded-xl font-semibold text-white text-sm transition shadow-xs cursor-pointer"
               >
                 <Plus className="h-4 w-4" /> Preset Toevoegen
               </button>
