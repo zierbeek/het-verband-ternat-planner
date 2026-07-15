@@ -61,7 +61,7 @@ export async function seedDatabase() {
   // 1. Create a single administrator user
   const adminUser = await prisma.user.create({
     data: {
-      email: "admin@homenursing.org",
+      email: "admin@planner.com",
       passwordHash: hashPassword("admin123"),
       name: "Beheerder",
       role: "ADMINISTRATOR",

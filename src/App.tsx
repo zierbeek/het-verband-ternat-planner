@@ -18,6 +18,7 @@ import ShiftCalendar from "./components/ShiftCalendar.tsx";
 import LeaveManagement from "./components/LeaveManagement.tsx";
 import SwapWorkflows from "./components/SwapWorkflows.tsx";
 import AdminPanel from "./components/AdminPanel.tsx";
+import PasswordChangeModal from "./components/PasswordChangeModal.tsx";
 import { getUserColorStyle } from "./utils/userColor.ts";
 
 export default function App() {
@@ -37,6 +38,11 @@ export default function App() {
       if (res.ok) {
         const userData = await res.json();
         setUser(userData);
+        // Check if password change is required
+        if (userData.requiresPasswordChange) {
+          setRequiresPasswordChange(true);
+          setShowPasswordModal(true);
+        }
       } else {
         handleLogout();
       }

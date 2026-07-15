@@ -377,8 +377,21 @@ async function startServer() {
         return res.status(401).json({ error: "Invalid email or password" });
       }
 
+      // Check if this is the default admin account that needs password change
+      // Only allow default admin login if password is still the default
+      const isDefaultAdmin = user.email === "admin@planner.com" && password === "admin123";
+      const requiresPasswordChange = isDefaultAdmin;
+      
+      // If someone tries to login with default admin credentials but password was already changed,
+      // reject the login for security
+      if (user.email === "admin@planner.com" && password === "admin123" && !isDefaultAdmin) {
+        return res.status(401).json({ 
+          error: "Default admin password has been changed. Please use your new credentials or contact an administrator." 
+        });
+      }
+
       const token = generateToken(user);
-      await logAction(user.id, "USER_LOGIN", `User logged in successfully`);
+      await logAction(user.id, "USER_LOGIN", `User logged in successfully${isDefaultAdmin ? " (default admin, password change required)" : ""}`);
 
       return res.json({
         token,
@@ -389,6 +402,7 @@ async function startServer() {
           name: user.name,
           employee: user.employee,
         },
+        requiresPasswordChange,
       });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
