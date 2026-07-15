@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { User, LogIn, ShieldAlert, Sparkles, UserCheck } from "lucide-react";
+import { User, LogIn, ShieldAlert, UserCheck } from "lucide-react";
 
 interface LoginProps {
   onLoginSuccess: (token: string, user: any) => void;
@@ -73,8 +73,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
-          <div className="h-12 w-12 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-md">
-            <Sparkles className="h-6 w-6" />
+          <div className="h-12 w-12 rounded-xl bg-blue-600 overflow-hidden shadow-md">
+            <img src="/icon-512.png" alt="Logo" className="h-full w-full object-cover" />
           </div>
         </div>
         <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-slate-900">

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import {
-  Sparkles,
   LayoutDashboard,
   Calendar,
   ClipboardList,
@@ -164,8 +163,8 @@ export default function App() {
           </button>
           
           <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-xs">
-              <Sparkles className="h-4.5 w-4.5" />
+            <div className="h-8 w-8 rounded-lg bg-blue-600 overflow-hidden shadow-xs">
+              <img src="/icon-512.png" alt="Logo" className="h-full w-full object-cover" />
             </div>
             <span className="font-bold text-sm sm:text-base tracking-tight text-slate-900">
               Het Verband Ternat planner
