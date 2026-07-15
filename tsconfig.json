@@ -3,6 +3,7 @@
     "target": "ES2022",
     "experimentalDecorators": true,
     "useDefineForClassFields": false,
+    "useUnknownInCatchVariables": false,
     "module": "ESNext",
     "lib": [
       "ES2022",
