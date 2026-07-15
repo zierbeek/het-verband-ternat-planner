@@ -2272,6 +2272,7 @@ async function startServer() {
         return res.status(409).json({
           error: `Deze ruil is al ${swap.status === "APPROVED_ADMIN" ? "goedgekeurd" : "geweigerd"} door een andere beheerder.`,
         });
+      }
 
       // A beheerder cannot approve or reject their own swap request
       if (swap.requester.userId === req.user.id || swap.target.userId === req.user.id) {
