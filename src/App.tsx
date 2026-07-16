@@ -148,14 +148,14 @@ export default function App() {
 
   // Sidebar Menu Items filtered by Role
   const primaryMenuItems = [
-    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { id: "calendar", label: "Dienstregeling", icon: Calendar },
-    { id: "leave", label: "Verlofaanvragen", icon: ClipboardList },
-    { id: "swaps", label: "Ruilbord", icon: ArrowLeftRight },
+    { id: "dashboard", label: "Dashboard", shortLabel: "Dashboard", icon: LayoutDashboard },
+    { id: "calendar", label: "Dienstregeling", shortLabel: "Planning", icon: Calendar },
+    { id: "leave", label: "Verlofaanvragen", shortLabel: "Verlof", icon: ClipboardList },
+    { id: "swaps", label: "Ruilbord", shortLabel: "Ruilbord", icon: ArrowLeftRight },
   ];
   const adminMenuItems =
     user.role === "ADMINISTRATOR"
-      ? [{ id: "admin", label: "Beheercentrum", icon: Settings, badge: adminOpenRequests }]
+      ? [{ id: "admin", label: "Beheercentrum", shortLabel: "Beheer", icon: Settings, badge: adminOpenRequests }]
       : [];
   const menuItems = [...primaryMenuItems, ...adminMenuItems];
 
@@ -311,7 +311,7 @@ export default function App() {
       </div>
 
       {/* Mobile Bottom Tab Navigation - iOS & Android Optimized */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200/80 backdrop-blur-md flex justify-around items-center h-16 safe-bottom z-40 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200/80 backdrop-blur-md flex items-stretch h-[72px] safe-bottom z-40 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
@@ -319,22 +319,22 @@ export default function App() {
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className={`flex flex-col items-center justify-center flex-1 h-full py-2 transition-all relative active:scale-95 ${
-                isActive ? "text-blue-600 font-extrabold" : "text-slate-400 hover:text-slate-600"
+              className={`flex flex-col items-center justify-center gap-1 flex-1 h-full px-1 relative active:scale-95 ${
+                isActive ? "text-blue-600" : "text-slate-500"
               }`}
             >
               <div
-                className={`flex items-center justify-center rounded-full transition-all ${
-                  isActive ? "bg-blue-50 h-7 w-7" : "h-7 w-7"
+                className={`flex items-center justify-center rounded-full h-8 w-8 ${
+                  isActive ? "bg-blue-50" : ""
                 }`}
               >
-                <Icon className={`h-4.5 w-4.5 transition-transform ${isActive ? "scale-110 text-blue-600" : ""}`} />
+                <Icon className={`h-5 w-5 ${isActive ? "text-blue-600" : ""}`} />
               </div>
-              <span className="text-[9px] mt-0.5 tracking-tight truncate max-w-[64px]">
-                {item.label}
+              <span className={`text-[10px] leading-none text-center ${isActive ? "font-bold" : "font-medium"}`}>
+                {item.shortLabel}
               </span>
               {item.badge ? (
-                <span className="absolute top-0.5 right-3 min-w-4.5 h-4.5 px-1 inline-flex items-center justify-center rounded-full bg-blue-600 text-white text-[9px] font-extrabold shadow-sm">
+                <span className="absolute top-1 right-2 min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center rounded-full bg-blue-600 text-white text-[9px] font-extrabold shadow-sm">
                   {item.badge}
                 </span>
               ) : null}

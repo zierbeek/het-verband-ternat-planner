@@ -189,9 +189,21 @@
   }
 }
 
-/* Smooth transitions for better UX */
-* {
-  transition: all 0.2s ease;
+/* Smooth transitions for interactive elements only.
+   NOTE: previously this was `* { transition: all 0.2s ease; }`, which
+   applied a transition to every element on the page (including deeply
+   nested calendar cells, list items, etc). That's expensive to compute
+   on every scroll-triggered layout change and was causing scrolling to
+   feel stuck/unresponsive on mobile, especially inside the shift
+   calendar grid. Scoping it to interactive elements keeps the same
+   "polished" feel without touching scroll performance. */
+button,
+a,
+input,
+select,
+textarea,
+[class*="hover:"] {
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
 }
 
 /* Disable animations on reduced motion */
