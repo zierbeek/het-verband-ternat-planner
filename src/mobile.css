@@ -85,6 +85,24 @@
     scrollbar-width: thin;
   }
 
+  /* Horizontally scrollable areas (e.g. calendar grids, wide tables) get a
+     visible scrollbar and momentum scrolling as a hint that there's more
+     content off-screen */
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(100, 116, 139, 0.4) transparent;
+  }
+
+  .overflow-x-auto::-webkit-scrollbar {
+    height: 6px;
+  }
+
+  .overflow-x-auto::-webkit-scrollbar-thumb {
+    background-color: rgba(100, 116, 139, 0.4);
+    border-radius: 9999px;
+  }
+
   /* Safe area insets for notched devices */
   .safe-area-inset-top {
     padding-top: env(safe-area-inset-top);

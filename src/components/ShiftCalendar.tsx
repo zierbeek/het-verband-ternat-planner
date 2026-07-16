@@ -794,64 +794,66 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
         
         {/* Month View */}
         {viewType === "month" && (
-          <div>
-            <div className="grid grid-cols-7 bg-slate-50/70 border-b border-slate-200 py-3 text-center text-xs sm:text-sm font-bold text-slate-500 uppercase tracking-wider">
-              {["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"].map((day) => (
-                <div key={day}>{day}</div>
-              ))}
-            </div>
-            <div className="grid grid-cols-7 border-slate-200">
-              {monthDates.map((date, idx) => {
-                const dayShifts = getShiftsForDate(date);
-                const isCurrentMonth = date.getMonth() === currentDate.getMonth();
+          <div className="overflow-x-auto touch-pan-x">
+            <div className="min-w-[700px] sm:min-w-0">
+              <div className="grid grid-cols-7 bg-slate-50/70 border-b border-slate-200 py-3 text-center text-xs sm:text-sm font-bold text-slate-500 uppercase tracking-wider">
+                {["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"].map((day) => (
+                  <div key={day}>{day}</div>
+                ))}
+              </div>
+              <div className="grid grid-cols-7 border-slate-200">
+                {monthDates.map((date, idx) => {
+                  const dayShifts = getShiftsForDate(date);
+                  const isCurrentMonth = date.getMonth() === currentDate.getMonth();
 
-                return (
-                  <div
-                    key={idx}
-                    className={`min-h-[110px] p-2 border-r border-b border-slate-200 flex flex-col gap-1 transition ${
-                      isCurrentMonth ? "bg-white" : "bg-slate-50/40 text-slate-400"
-                    }`}
-                  >
-                    <span className="text-xs sm:text-sm font-bold text-slate-700">
-                      {date.getDate()}
-                    </span>
-                    <div className="space-y-1 overflow-y-auto max-h-[85px]">
-                      {dayShifts.map((shift) => (
-                        <div
-                          key={shift.id}
-                          onClick={() => {
-                            if (user.role === "ADMINISTRATOR") {
-                              openShiftEditor(shift);
-                            }
-                          }}
-                          style={{ backgroundColor: shift.color + "22", borderLeftColor: shift.color }}
-                          className="px-1.5 py-0.5 border-l-2 rounded-r text-[10px] font-semibold text-slate-800 cursor-pointer hover:opacity-85 transition truncate"
-                          title={`${shift.name} (${shift.startTime}-${shift.endTime})`}
-                        >
-                          {shift.startTime} {shift.name}
-                        </div>
-                      ))}
-                      {getLeavesForDate(date).map((leave) => (
-                        <div
-                          key={`leave-${leave.id}`}
-                          style={{
-                            borderLeftColor: leave.status === "APPROVED" ? "#f43f5e" : "#f59e0b",
-                            ...getEmployeeBadgeStyle(leave.employeeId),
-                          }}
-                          className={`px-1.5 py-0.5 border-l-2 rounded-r text-[10px] font-semibold truncate ${
-                            leave.status === "APPROVED"
-                              ? "bg-red-50 text-red-700"
-                              : "bg-amber-50 text-amber-700 italic"
-                          }`}
-                          title={`Verlof (${leave.type}): ${leave.employee.user.name} (${leave.status === "APPROVED" ? "Goedgekeurd" : "In afwachting"})`}
-                        >
-                          🌴 {leave.employee.user.name.split(" ")[0]}
-                        </div>
-                      ))}
+                  return (
+                    <div
+                      key={idx}
+                      className={`min-h-[110px] p-2 border-r border-b border-slate-200 flex flex-col gap-1 transition ${
+                        isCurrentMonth ? "bg-white" : "bg-slate-50/40 text-slate-400"
+                      }`}
+                    >
+                      <span className="text-xs sm:text-sm font-bold text-slate-700">
+                        {date.getDate()}
+                      </span>
+                      <div className="space-y-1 overflow-y-auto max-h-[85px]">
+                        {dayShifts.map((shift) => (
+                          <div
+                            key={shift.id}
+                            onClick={() => {
+                              if (user.role === "ADMINISTRATOR") {
+                                openShiftEditor(shift);
+                              }
+                            }}
+                            style={{ backgroundColor: shift.color + "22", borderLeftColor: shift.color }}
+                            className="px-1.5 py-0.5 border-l-2 rounded-r text-[10px] font-semibold text-slate-800 cursor-pointer hover:opacity-85 transition truncate"
+                            title={`${shift.name} (${shift.startTime}-${shift.endTime})`}
+                          >
+                            {shift.startTime} {shift.name}
+                          </div>
+                        ))}
+                        {getLeavesForDate(date).map((leave) => (
+                          <div
+                            key={`leave-${leave.id}`}
+                            style={{
+                              borderLeftColor: leave.status === "APPROVED" ? "#f43f5e" : "#f59e0b",
+                              ...getEmployeeBadgeStyle(leave.employeeId),
+                            }}
+                            className={`px-1.5 py-0.5 border-l-2 rounded-r text-[10px] font-semibold truncate ${
+                              leave.status === "APPROVED"
+                                ? "bg-red-50 text-red-700"
+                                : "bg-amber-50 text-amber-700 italic"
+                            }`}
+                            title={`Verlof (${leave.type}): ${leave.employee.user.name} (${leave.status === "APPROVED" ? "Goedgekeurd" : "In afwachting"})`}
+                          >
+                            🌴 {leave.employee.user.name.split(" ")[0]}
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
@@ -896,129 +898,133 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
               </div>
             )}
 
-            <div className="grid grid-cols-7 bg-slate-50/70 border-b border-slate-200 py-3.5 text-center">
-              {weekDates.map((date, idx) => (
-                <div key={idx} className="space-y-1">
-                  <span className="text-xs sm:text-sm font-bold text-slate-400 uppercase tracking-wider">
-                    {date.toLocaleDateString("nl-BE", { weekday: "short" })}
-                  </span>
-                  <p className="text-lg font-extrabold text-slate-800">
-                    {date.getDate()}
-                  </p>
+            <div className="overflow-x-auto touch-pan-x">
+              <div className="min-w-[980px] lg:min-w-0">
+                <div className="grid grid-cols-7 bg-slate-50/70 border-b border-slate-200 py-3.5 text-center">
+                  {weekDates.map((date, idx) => (
+                    <div key={idx} className="space-y-1">
+                      <span className="text-xs sm:text-sm font-bold text-slate-400 uppercase tracking-wider">
+                        {date.toLocaleDateString("nl-BE", { weekday: "short" })}
+                      </span>
+                      <p className="text-lg font-extrabold text-slate-800">
+                        {date.getDate()}
+                      </p>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
 
-            <div className="grid grid-cols-7 divide-x divide-slate-200 min-h-[400px]">
-              {weekDates.map((date, idx) => {
-                const morningShifts = getShiftsForDateAndSlot(date, "morning");
-                const afternoonShifts = getShiftsForDateAndSlot(date, "afternoon");
-                const dayKey = date.toISOString().split("T")[0];
-                return (
-                  <div key={idx} className="p-2 bg-white space-y-2 flex flex-col">
-                    {[
-                      { key: "morning" as const, label: "Voormiddag", shifts: morningShifts },
-                      { key: "afternoon" as const, label: "Namiddag", shifts: afternoonShifts },
-                    ].map((slot) => {
-                      const slotKey = `${dayKey}-${slot.key}`;
+                <div className="grid grid-cols-7 divide-x divide-slate-200 min-h-[400px]">
+                  {weekDates.map((date, idx) => {
+                    const morningShifts = getShiftsForDateAndSlot(date, "morning");
+                    const afternoonShifts = getShiftsForDateAndSlot(date, "afternoon");
+                    const dayKey = date.toISOString().split("T")[0];
+                    return (
+                      <div key={idx} className="p-2 bg-white space-y-2 flex flex-col">
+                        {[
+                          { key: "morning" as const, label: "Voormiddag", shifts: morningShifts },
+                          { key: "afternoon" as const, label: "Namiddag", shifts: afternoonShifts },
+                        ].map((slot) => {
+                          const slotKey = `${dayKey}-${slot.key}`;
 
-                      return (
-                        <div
-                          key={slot.key}
-                          onDragOver={(event) => {
-                            event.preventDefault();
-                            setDraggedSlot(slotKey);
-                          }}
-                          onDragLeave={() => {
-                            if (draggedSlot === slotKey) setDraggedSlot(null);
-                          }}
-                          onDrop={(event) => handlePlannerDrop(event, date, slot.key)}
-                          className={`rounded-xl border p-2 min-h-[130px] flex flex-col gap-2 transition ${
-                            draggedSlot === slotKey
-                              ? "border-blue-400 bg-blue-50/60"
-                              : "border-slate-200 bg-slate-50/40"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">{slot.label}</span>
-                            {user.role === "ADMINISTRATOR" && <span className="text-[9px] text-slate-400">Drop hier</span>}
-                          </div>
-
-                          <div className="space-y-1.5 flex-1">
-                            {slot.shifts.length === 0 ? (
-                              <div className="text-[10px] text-slate-300 italic border border-dashed border-slate-200 rounded-lg sm:rounded-xl px-2 py-3 text-center">
-                                Sleep een shift of template hier
+                          return (
+                            <div
+                              key={slot.key}
+                              onDragOver={(event) => {
+                                event.preventDefault();
+                                setDraggedSlot(slotKey);
+                              }}
+                              onDragLeave={() => {
+                                if (draggedSlot === slotKey) setDraggedSlot(null);
+                              }}
+                              onDrop={(event) => handlePlannerDrop(event, date, slot.key)}
+                              className={`rounded-xl border p-2 min-h-[130px] flex flex-col gap-2 transition ${
+                                draggedSlot === slotKey
+                                  ? "border-blue-400 bg-blue-50/60"
+                                  : "border-slate-200 bg-slate-50/40"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">{slot.label}</span>
+                                {user.role === "ADMINISTRATOR" && <span className="text-[9px] text-slate-400">Drop hier</span>}
                               </div>
-                            ) : (
-                              slot.shifts.map((shift) => (
-                                <div
-                                  key={shift.id}
-                                  draggable={user.role === "ADMINISTRATOR" && window.innerWidth > 768}
-                                  onDragStart={() => setDraggedItem({ type: "shift", shiftId: shift.id })}
-                                  onDragEnd={() => setDraggedItem(null)}
-                                  onClick={() => {
-                                    if (user.role === "ADMINISTRATOR") {
-                                      openShiftEditor(shift);
-                                    }
-                                  }}
-                                  style={{ borderLeftColor: shift.color }}
-                                  className="p-2 border-l-4 rounded-r-xl bg-white hover:bg-slate-50 border border-slate-200 transition cursor-pointer flex flex-col gap-1 shadow-2xs"
-                                >
-                                  <span className="font-bold text-slate-800 text-[11px] truncate">{shift.name}</span>
-                                  <div className="flex items-center gap-1 text-[10px] text-slate-500 font-medium">
-                                    <Clock className="h-3 w-3 shrink-0" /> {shift.startTime} - {shift.endTime}
-                                  </div>
 
-                                  <div className="flex flex-wrap gap-1 mt-0.5">
-                                    {shift.assignments && shift.assignments.length > 0 ? (
-                                      shift.assignments.map((assign: any) => (
-                                        <span
-                                          key={assign.id}
-                                          style={getEmployeeBadgeStyle(assign.employeeId)}
-                                          className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full border truncate max-w-full"
-                                        >
-                                          {assign.employee.user.name.split(" ")[0]}
-                                        </span>
-                                      ))
-                                    ) : (
-                                      <span className="text-red-500 text-[9px] font-bold bg-red-50 px-1.5 rounded-full">
-                                        Onbezet
-                                      </span>
-                                    )}
+                              <div className="space-y-1.5 flex-1">
+                                {slot.shifts.length === 0 ? (
+                                  <div className="text-[10px] text-slate-300 italic border border-dashed border-slate-200 rounded-lg sm:rounded-xl px-2 py-3 text-center">
+                                    Sleep een shift of template hier
                                   </div>
-                                </div>
-                              ))
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
+                                ) : (
+                                  slot.shifts.map((shift) => (
+                                    <div
+                                      key={shift.id}
+                                      draggable={user.role === "ADMINISTRATOR" && window.innerWidth > 768}
+                                      onDragStart={() => setDraggedItem({ type: "shift", shiftId: shift.id })}
+                                      onDragEnd={() => setDraggedItem(null)}
+                                      onClick={() => {
+                                        if (user.role === "ADMINISTRATOR") {
+                                          openShiftEditor(shift);
+                                        }
+                                      }}
+                                      style={{ borderLeftColor: shift.color }}
+                                      className="p-2 border-l-4 rounded-r-xl bg-white hover:bg-slate-50 border border-slate-200 transition cursor-pointer flex flex-col gap-1 shadow-2xs"
+                                    >
+                                      <span className="font-bold text-slate-800 text-[11px] truncate">{shift.name}</span>
+                                      <div className="flex items-center gap-1 text-[10px] text-slate-500 font-medium">
+                                        <Clock className="h-3 w-3 shrink-0" /> {shift.startTime} - {shift.endTime}
+                                      </div>
 
-                    {/* Approved Leaves in Week View */}
-                    {getLeavesForDate(date).length > 0 && (
-                      <div className="pt-2 border-t border-slate-100 mt-auto space-y-1">
-                        <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-                          <span>Verlof 🌴</span>
-                        </div>
-                        {getLeavesForDate(date).map((leave) => (
-                          <div
-                            key={`leave-${leave.id}`}
-                            className={`p-1 border-l-2 text-[10px] leading-tight rounded-r ${
-                              leave.status === "APPROVED"
-                                ? "bg-red-50 border-red-400 text-red-700"
-                                : "bg-amber-50 border-amber-400 text-amber-700 italic"
-                            }`}
-                            title={`Verlof (${leave.type}): ${leave.employee.user.name} (${leave.status === "APPROVED" ? "Goedgekeurd" : "In afwachting"})`}
-                          >
-                            <span className="font-semibold block truncate">{leave.employee.user.name.split(" ")[0]}</span>
-                            <span className="text-[8px] text-slate-500 block truncate">{leave.reason || leave.type}</span>
+                                      <div className="flex flex-wrap gap-1 mt-0.5">
+                                        {shift.assignments && shift.assignments.length > 0 ? (
+                                          shift.assignments.map((assign: any) => (
+                                            <span
+                                              key={assign.id}
+                                              style={getEmployeeBadgeStyle(assign.employeeId)}
+                                              className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full border truncate max-w-full"
+                                            >
+                                              {assign.employee.user.name.split(" ")[0]}
+                                            </span>
+                                          ))
+                                        ) : (
+                                          <span className="text-red-500 text-[9px] font-bold bg-red-50 px-1.5 rounded-full">
+                                            Onbezet
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {/* Approved Leaves in Week View */}
+                        {getLeavesForDate(date).length > 0 && (
+                          <div className="pt-2 border-t border-slate-100 mt-auto space-y-1">
+                            <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                              <span>Verlof 🌴</span>
+                            </div>
+                            {getLeavesForDate(date).map((leave) => (
+                              <div
+                                key={`leave-${leave.id}`}
+                                className={`p-1 border-l-2 text-[10px] leading-tight rounded-r ${
+                                  leave.status === "APPROVED"
+                                    ? "bg-red-50 border-red-400 text-red-700"
+                                    : "bg-amber-50 border-amber-400 text-amber-700 italic"
+                                }`}
+                                title={`Verlof (${leave.type}): ${leave.employee.user.name} (${leave.status === "APPROVED" ? "Goedgekeurd" : "In afwachting"})`}
+                              >
+                                <span className="font-semibold block truncate">{leave.employee.user.name.split(" ")[0]}</span>
+                                <span className="text-[8px] text-slate-500 block truncate">{leave.reason || leave.type}</span>
+                              </div>
+                            ))}
                           </div>
-                        ))}
+                        )}
                       </div>
-                    )}
-                  </div>
-                );
-              })}
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -1157,7 +1163,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
       {/* CREATE SHIFT MODAL */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex justify-center items-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-200">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-200 max-h-[85vh] overflow-y-auto">
             <h3 className="text-lg font-bold text-slate-900">Nieuwe Shift Toevoegen</h3>
             
             <form onSubmit={handleCreateShift} className="space-y-3 text-sm text-slate-700">
@@ -1298,7 +1304,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
       {/* EDIT SHIFT MODAL */}
       {isEditModalOpen && selectedShift && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex justify-center items-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-200">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-200 max-h-[85vh] overflow-y-auto">
             <h3 className="text-lg font-bold text-slate-900">Shift Beheren</h3>
             
             <div className="space-y-3 text-sm text-slate-700">
@@ -1378,7 +1384,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
       {/* COPY WEEK MODAL */}
       {isCopyWeekOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex justify-center items-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-xl border border-slate-200">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-xl border border-slate-200 max-h-[85vh] overflow-y-auto">
             <h3 className="text-lg font-bold text-slate-900 flex items-center gap-1.5">
               <Copy className="h-5 w-5 text-blue-500" /> Planning Kopiëren & Lange Termijn Plannen
             </h3>

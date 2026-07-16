@@ -339,7 +339,7 @@ export default function LeaveManagement({ user, token }: LeaveManagementProps) {
       {/* NEW REQUEST MODAL */}
       {isNewRequestOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex justify-center items-center p-4 z-50">
-          <div className="bg-white rounded-xl sm:rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-200">
+          <div className="bg-white rounded-xl sm:rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-200 max-h-[85vh] overflow-y-auto">
             <h3 className="text-lg font-bold text-slate-900">Verlof / Afwezigheid Aanvragen</h3>
             
             <form onSubmit={handleSubmitRequest} className="space-y-3 text-sm text-slate-700">

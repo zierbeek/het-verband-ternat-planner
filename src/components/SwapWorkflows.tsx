@@ -323,7 +323,7 @@ export default function SwapWorkflows({ user, token }: SwapWorkflowsProps) {
       {/* NEW PROPOSAL MODAL */}
       {isNewSwapOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex justify-center items-center p-4 z-50">
-          <div className="bg-white rounded-xl sm:rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-200">
+          <div className="bg-white rounded-xl sm:rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-200 max-h-[85vh] overflow-y-auto">
             <h3 className="text-lg font-bold text-slate-900 flex items-center gap-1.5">
               <ArrowLeftRight className="h-5 w-5 text-blue-500" /> Ruildienst Voorstellen
             </h3>
