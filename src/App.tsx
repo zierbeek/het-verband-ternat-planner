@@ -160,10 +160,10 @@ export default function App() {
   const menuItems = [...primaryMenuItems, ...adminMenuItems];
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+    <div className="h-app-shell bg-slate-50 flex flex-col font-sans overflow-hidden">
       
       {/* Upper Navigation Header */}
-      <header className="bg-white border-b border-slate-200 h-16 shrink-0 flex justify-between items-center px-4 sm:px-6 sticky top-0 z-40 shadow-xs touch-none">
+      <header className="bg-white border-b border-slate-200 h-16 shrink-0 flex justify-between items-center px-4 sm:px-6 sticky top-0 z-40 shadow-xs">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-lg bg-blue-600 overflow-hidden shadow-xs">
@@ -207,7 +207,7 @@ export default function App() {
       </header>
 
       {/* Main layout frame */}
-      <div className="flex-1 flex overflow-hidden safe-area-inset-top">
+      <div className="flex-1 flex min-h-0 overflow-hidden safe-area-inset-top">
 
         {/* Sidebar Left Navigation - Desktop */}
         <aside
@@ -300,7 +300,7 @@ export default function App() {
         </aside>
 
         {/* Content Frame */}
-        <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 pb-24 md:pb-6 safe-area-inset-bottom">
+        <main className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 md:p-6 pb-24 md:pb-6 safe-area-inset-bottom">
           {activeTab === "dashboard" && <Dashboard user={user} token={token} />}
           {activeTab === "calendar" && <ShiftCalendar user={user} token={token} />}
           {activeTab === "leave" && <LeaveManagement user={user} token={token} />}
