@@ -898,9 +898,9 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
               </div>
             )}
 
-            <div className="overflow-x-auto touch-pan-x">
+            <div className="overflow-x-auto overflow-y-auto touch-pan-x max-h-[calc(100vh-280px)] sm:max-h-[calc(100vh-240px)] md:max-h-[calc(100vh-200px)]">
               <div className="min-w-[980px] lg:min-w-0">
-                <div className="grid grid-cols-7 bg-slate-50/70 border-b border-slate-200 py-3.5 text-center">
+                <div className="grid grid-cols-7 bg-slate-50/70 border-b border-slate-200 py-3.5 text-center sticky top-0 z-10">
                   {weekDates.map((date, idx) => (
                     <div key={idx} className="space-y-1">
                       <span className="text-xs sm:text-sm font-bold text-slate-400 uppercase tracking-wider">
@@ -913,7 +913,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                   ))}
                 </div>
 
-                <div className="grid grid-cols-7 divide-x divide-slate-200 min-h-[400px]">
+                <div className="grid grid-cols-7 divide-x divide-slate-200 min-h-[400px]" role="region" aria-label="Weekweergave dienstregeling">
                   {weekDates.map((date, idx) => {
                     const morningShifts = getShiftsForDateAndSlot(date, "morning");
                     const afternoonShifts = getShiftsForDateAndSlot(date, "afternoon");
