@@ -942,6 +942,17 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
         </div>
       )}
       {/* Upper Navigation/Controls bar */}
+      {isPrintMode && (
+        <div className="print-header">
+          <h1 className="text-3xl font-bold text-slate-900 tracking-tight text-center mb-6">
+            {currentDate.toLocaleDateString("nl-BE", {
+              month: "long",
+              year: "numeric",
+            })}
+          </h1>
+        </div>
+      )}
+
       {!isPrintMode && (
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
           <div className="flex items-center gap-2">
@@ -2568,7 +2579,6 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                     className="block w-full px-3 py-2 border border-slate-300 rounded-lg sm:rounded-xl text-sm"
                   />
                 </div>
-
                 <div className="flex gap-2 justify-end pt-2">
                   <button
                     type="button"

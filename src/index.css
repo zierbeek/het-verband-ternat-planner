@@ -51,4 +51,83 @@ body {
   background: #94a3b8;
 }
 
+/* Print Mode Styles */
+@media print {
+  /* Hide all interactive elements */
+  button,
+  [role="button"],
+  input,
+  select,
+  .hidden-print,
+  .no-print {
+    display: none !important;
+  }
+
+  /* Clean white background */
+  body {
+    background-color: white !important;
+    margin: 0;
+    padding: 20px;
+  }
+
+  * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+    background: white !important;
+  }
+
+  /* Print header styling */
+  .print-header {
+    display: block !important;
+    background: white !important;
+    padding: 0 !important;
+    border: none !important;
+    margin-bottom: 30px;
+  }
+
+  .print-header h1 {
+    font-size: 28px;
+    font-weight: bold;
+    margin: 0 0 20px 0;
+    padding: 0;
+    text-align: center;
+    color: black;
+  }
+
+  /* Calendar grid */
+  .calendar-grid {
+    width: 100%;
+    page-break-inside: avoid;
+  }
+
+  .calendar-cell {
+    page-break-inside: avoid;
+    border: 1px solid #333;
+  }
+
+  /* Shift elements */
+  .shift-badge,
+  .shift-block {
+    background-color: white !important;
+    color: black !important;
+    border: 1px solid #333 !important;
+    page-break-inside: avoid;
+  }
+
+  /* Ensure all text is black */
+  h1, h2, h3, h4, h5, h6, p, span, div {
+    color: black !important;
+  }
+
+  /* Remove spacing */
+  .space-y-6 {
+    gap: 0 !important;
+  }
+
+  /* Hide scrollbars */
+  ::-webkit-scrollbar {
+    display: none !important;
+  }
+}
+
 
