@@ -975,93 +975,99 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
-            {/* View Switcher */}
-            <div className="flex rounded-lg sm:rounded-xl bg-slate-100 p-1">
-              {[
-                { view: "month", label: "Maand" },
-                { view: "week", label: "Week" },
-                { view: "day", label: "Dag" },
-              ].map(({ view, label }) => (
-                <button
-                  key={view}
-                  onClick={() => setViewType(view as any)}
-                  className={`px-3 py-1 text-xs sm:text-sm font-bold rounded-md transition cursor-pointer ${
-                    viewType === view
-                      ? "bg-white text-blue-600 shadow-xs"
-                      : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            {/* Filter by Staff */}
-            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl px-2 py-1.5 text-xs sm:text-sm text-slate-700">
-              <Filter className="h-3.5 w-3.5 text-slate-400" />
-              <select
-                value={selectedEmployeeFilter}
-                onChange={(e) => setSelectedEmployeeFilter(e.target.value)}
-                className="bg-transparent font-medium border-0 focus:ring-0 cursor-pointer"
-              >
-                <option value="all">Alle Medewerkers</option>
-                {employees.map((emp) => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.user?.name}
-                  </option>
+            {/* Utility controls: view switcher, employee filter, print */}
+            <div className="flex flex-wrap items-center gap-2.5">
+              {/* View Switcher */}
+              <div className="flex rounded-lg sm:rounded-xl bg-slate-100 p-1">
+                {[
+                  { view: "month", label: "Maand" },
+                  { view: "week", label: "Week" },
+                  { view: "day", label: "Dag" },
+                ].map(({ view, label }) => (
+                  <button
+                    key={view}
+                    onClick={() => setViewType(view as any)}
+                    className={`px-3 py-1 text-xs sm:text-sm font-bold rounded-md transition cursor-pointer ${
+                      viewType === view
+                        ? "bg-white text-blue-600 shadow-xs"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    {label}
+                  </button>
                 ))}
-              </select>
-            </div>
+              </div>
 
-            {/* Print Trigger */}
-            <button
-              onClick={() => {
-                setIsPrintMode(true);
-                setTimeout(() => {
-                  window.print();
-                  setIsPrintMode(false);
-                }, 500);
-              }}
-              className="p-2 border border-slate-200 hover:bg-slate-50 rounded-lg sm:rounded-xl text-slate-600 transition cursor-pointer"
-              title="Afdrukken"
-            >
-              <Printer className="h-4 w-4" />
-            </button>
+              {/* Filter by Staff */}
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg sm:rounded-xl px-2 py-1.5 text-xs sm:text-sm text-slate-700">
+                <Filter className="h-3.5 w-3.5 text-slate-400" />
+                <select
+                  value={selectedEmployeeFilter}
+                  onChange={(e) => setSelectedEmployeeFilter(e.target.value)}
+                  className="bg-transparent font-medium border-0 focus:ring-0 cursor-pointer"
+                >
+                  <option value="all">Alle Medewerkers</option>
+                  {employees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.user?.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Print Trigger */}
+              <button
+                onClick={() => {
+                  setIsPrintMode(true);
+                  setTimeout(() => {
+                    window.print();
+                    setIsPrintMode(false);
+                  }, 500);
+                }}
+                className="p-2 border border-slate-200 hover:bg-slate-50 rounded-lg sm:rounded-xl text-slate-600 transition cursor-pointer"
+                title="Afdrukken"
+              >
+                <Printer className="h-4 w-4" />
+              </button>
+            </div>
 
             {/* Admin Controls */}
             {user.role === "ADMINISTRATOR" && (
               <>
-                <button
-                  onClick={() => (isBulkMode ? exitBulkMode() : setIsBulkMode(true))}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer ${
-                    isBulkMode
-                      ? "border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
-                      : "border-slate-200 hover:bg-slate-50 text-slate-700"
-                  }`}
-                >
-                  <CheckSquare className="h-3.5 w-3.5" /> {isBulkMode ? "Selectie Sluiten" : "Bulk Bewerken"}
-                </button>
-                <button
-                  onClick={() => setIsCopyWeekOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 hover:bg-slate-50 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold text-slate-700 transition cursor-pointer"
-                >
-                  <Copy className="h-3.5 w-3.5" /> Week Kopiëren
-                </button>
-                <button
-                  onClick={() => setIsTemplatesModalOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 hover:bg-slate-50 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold text-slate-700 transition cursor-pointer"
-                >
-                  <Repeat className="h-3.5 w-3.5" /> Terugkerende Sjablonen
-                </button>
-                <button
-                  onClick={() => {
-                    setShiftDate(currentDate.toISOString().split("T")[0]);
-                    setIsCreateModalOpen(true);
-                  }}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold text-white transition shadow-xs cursor-pointer"
-                >
-                  <Plus className="h-4 w-4" /> Shift Aanmaken
-                </button>
+                <div className="hidden lg:block w-px self-stretch bg-slate-200" />
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <button
+                    onClick={() => (isBulkMode ? exitBulkMode() : setIsBulkMode(true))}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer whitespace-nowrap ${
+                      isBulkMode
+                        ? "border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
+                        : "border-slate-200 hover:bg-slate-50 text-slate-700"
+                    }`}
+                  >
+                    <CheckSquare className="h-3.5 w-3.5" /> {isBulkMode ? "Selectie Sluiten" : "Bulk Bewerken"}
+                  </button>
+                  <button
+                    onClick={() => setIsCopyWeekOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 hover:bg-slate-50 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold text-slate-700 transition cursor-pointer whitespace-nowrap"
+                  >
+                    <Copy className="h-3.5 w-3.5" /> Week Kopiëren
+                  </button>
+                  <button
+                    onClick={() => setIsTemplatesModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 hover:bg-slate-50 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold text-slate-700 transition cursor-pointer whitespace-nowrap"
+                  >
+                    <Repeat className="h-3.5 w-3.5" /> Terugkerende Sjablonen
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShiftDate(currentDate.toISOString().split("T")[0]);
+                      setIsCreateModalOpen(true);
+                    }}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold text-white transition shadow-xs cursor-pointer whitespace-nowrap"
+                  >
+                    <Plus className="h-4 w-4" /> Shift Aanmaken
+                  </button>
+                </div>
               </>
             )}
           </div>
