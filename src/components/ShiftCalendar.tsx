@@ -952,7 +952,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                 year: "numeric",
               })}
             </h2>
-            <div className="flex items-center border border-slate-200 rounded-lg sm:rounded-xl overflow-hidden ml-4">
+            <div className="flex items-center border border-slate-200 rounded-lg sm:rounded-xl ml-4">
               <button
                 onClick={prevDate}
                 className="p-1.5 hover:bg-slate-50 border-r border-slate-200 text-slate-600 transition cursor-pointer"
@@ -967,7 +967,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
               </button>
               <button
                 onClick={nextDate}
-                className="p-1.5 hover:bg-slate-50 border-l border-slate-200 text-slate-600 transition cursor-pointer"
+                className="p-1.5 hover:bg-slate-50 text-slate-600 transition cursor-pointer"
               >
                 <ChevronRight className="h-4 w-4" />
               </button>
