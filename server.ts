@@ -574,9 +574,42 @@ async function startServer() {
           end.setDate(end.getDate() + 1);
         }
 
+        // DTSTAMP must be "when this VEVENT representation was generated",
+        // which is fine as "now" - it is NOT a change-detection signal.
+        // Calendar clients (Google/Apple/Outlook) decide whether a
+        // previously-imported event has actually changed by comparing
+        // SEQUENCE/LAST-MODIFIED against what they already stored for that
+        // UID. Previously we emitted neither, so SEQUENCE implicitly stayed
+        // at 0 forever and LAST-MODIFIED was absent - meaning an edited
+        // shift (time change, reassignment, ...) looked identical to the
+        // client on every re-poll and it kept showing the stale version it
+        // originally imported. That's the "not syncing" bug: the feed
+        // content was correct, but clients had no reliable signal to know
+        // it had changed.
+        //
+        // Fix: derive LAST-MODIFIED from the most recent real change to
+        // this shift, which is either the shift row itself (time, name,
+        // notes, ...) or any of its assignments (who's working it) -
+        // reassigning an employee doesn't touch Shift.updatedAt since it's
+        // a separate related row.
+        const assignmentTimestamps = (shift.assignments || [])
+          .map((a: any) => a.updatedAt)
+          .filter(Boolean);
+        const lastModifiedDate = assignmentTimestamps.reduce(
+          (latest: Date, ts: Date) => (ts > latest ? ts : latest),
+          shift.updatedAt
+        );
+
         const dtStamp = formatUTC(new Date());
         const dtStart = formatUTC(start);
         const dtEnd = formatUTC(end);
+        const lastModified = formatUTC(new Date(lastModifiedDate));
+        // A monotonically increasing SEQUENCE per change is the more
+        // widely-honored signal (RFC 5545 §3.8.7.4) - derive one
+        // deterministically from the last-modified timestamp (seconds since
+        // epoch) so it only ever increases as real edits happen, without
+        // needing a dedicated counter column on the Shift model.
+        const sequence = Math.floor(new Date(lastModifiedDate).getTime() / 1000);
 
         // Build description
         const descParts = [];
@@ -598,6 +631,8 @@ async function startServer() {
         ics += foldLine("BEGIN:VEVENT") + "\r\n";
         ics += foldLine(`UID:shift-${shift.id}@homenursing.org`) + "\r\n";
         ics += foldLine(`DTSTAMP:${dtStamp}`) + "\r\n";
+        ics += foldLine(`LAST-MODIFIED:${lastModified}`) + "\r\n";
+        ics += foldLine(`SEQUENCE:${sequence}`) + "\r\n";
         ics += foldLine(`DTSTART:${dtStart}`) + "\r\n";
         ics += foldLine(`DTEND:${dtEnd}`) + "\r\n";
 
