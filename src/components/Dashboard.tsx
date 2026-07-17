@@ -14,6 +14,11 @@ export default function Dashboard({ user, token }: DashboardProps) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [highlightedAnnouncementId, setHighlightedAnnouncementId] = useState<string | null>(null);
+  // Scope for the iCal subscription link: "mine" only shows shifts assigned to
+  // this person, "all" shows the full team roster. Every account has an
+  // Employee profile (even administrators), so this choice applies equally
+  // to everyone rather than being tied to role.
+  const [icalScope, setIcalScope] = useState<"mine" | "all">("mine");
 
   const fetchDashboardData = async () => {
     try {
@@ -461,11 +466,29 @@ export default function Dashboard({ user, token }: DashboardProps) {
             <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
               Koppel je werkrooster direct aan je iPhone, Google Calendar of Outlook. Wijzigingen op het planbord worden automatisch gesynchroniseerd!
             </p>
+            <div className="flex gap-2 p-1 bg-slate-100 rounded-lg">
+              <button
+                onClick={() => setIcalScope("mine")}
+                className={`flex-1 py-1.5 text-xs font-bold rounded-md uppercase tracking-wider transition cursor-pointer ${
+                  icalScope === "mine" ? "bg-white text-blue-600 shadow-xs" : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                Enkel mijn shifts
+              </button>
+              <button
+                onClick={() => setIcalScope("all")}
+                className={`flex-1 py-1.5 text-xs font-bold rounded-md uppercase tracking-wider transition cursor-pointer ${
+                  icalScope === "all" ? "bg-white text-blue-600 shadow-xs" : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                Alle shifts
+              </button>
+            </div>
             <div className="space-y-2">
               <input
                 type="text"
                 readOnly
-                value={`${window.location.protocol}//${window.location.host}/api/calendar/sync/${user.id}/feed.ics`}
+                value={`${window.location.protocol}//${window.location.host}/api/calendar/sync/${user.id}/feed.ics?scope=${icalScope}`}
                 onClick={(e) => (e.target as HTMLInputElement).select()}
                 className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-600 font-mono focus:outline-hidden cursor-pointer"
                 title="Klik om te selecteren"
@@ -473,7 +496,7 @@ export default function Dashboard({ user, token }: DashboardProps) {
               <div className="flex gap-2">
                 <button
                   onClick={() => {
-                    navigator.clipboard.writeText(`${window.location.protocol}//${window.location.host}/api/calendar/sync/${user.id}/feed.ics`);
+                    navigator.clipboard.writeText(`${window.location.protocol}//${window.location.host}/api/calendar/sync/${user.id}/feed.ics?scope=${icalScope}`);
                     alert("iCal-link gekopieerd naar klembord!");
                   }}
                   className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg uppercase tracking-wider transition cursor-pointer text-center"
@@ -481,7 +504,7 @@ export default function Dashboard({ user, token }: DashboardProps) {
                   Kopieer Link
                 </button>
                 <a
-                  href={`${window.location.protocol === "https:" ? "webcal:" : "webcal:"}//${window.location.host}/api/calendar/sync/${user.id}/feed.ics`}
+                  href={`webcal://${window.location.host}/api/calendar/sync/${user.id}/feed.ics?scope=${icalScope}`}
                   className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg uppercase tracking-wider transition cursor-pointer text-center flex items-center justify-center"
                 >
                   Direct Abonneren

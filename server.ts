@@ -425,8 +425,15 @@ async function startServer() {
         return res.status(404).send("Gebruiker niet gevonden.");
       }
 
+      // Every account (including administrators) has an Employee profile, so
+      // "mine vs. all" can no longer be inferred from whether user.employee
+      // exists - that's always true. Instead the person explicitly picks via
+      // ?scope=all|mine. Default stays "mine" for old links that don't pass
+      // the param yet, so existing subscriptions don't suddenly change.
+      const scope = req.query.scope === "all" ? "all" : "mine";
+
       let shifts = [];
-      if (user.employee) {
+      if (scope === "mine" && user.employee) {
         shifts = await prisma.shift.findMany({
           where: {
             assignments: {
@@ -447,7 +454,8 @@ async function startServer() {
           orderBy: { date: "asc" },
         });
       } else {
-        // If the user is an administrator, fetch all shifts so they can see the whole roster in their calendar!
+        // scope === "all" (explicitly chosen), or this account has no Employee
+        // profile for some reason (legacy accounts predating auto-creation).
         shifts = await prisma.shift.findMany({
           include: {
             assignments: {
@@ -468,7 +476,7 @@ async function startServer() {
       ics += "PRODID:-//Thuisverpleging Het Verband Ternat//Planner//NL\r\n";
       ics += "CALSCALE:GREGORIAN\r\n";
       ics += "METHOD:PUBLISH\r\n";
-      if (user.role === "ADMINISTRATOR") {
+      if (scope === "all") {
         ics += "X-WR-CALNAME:Het Verband - Volledige Planning\r\n";
       } else {
         ics += `X-WR-CALNAME:Het Verband - Shifts van ${user.name}\r\n`;
@@ -593,7 +601,7 @@ async function startServer() {
         ics += foldLine(`DTSTART:${dtStart}`) + "\r\n";
         ics += foldLine(`DTEND:${dtEnd}`) + "\r\n";
 
-        if (user.role === "ADMINISTRATOR") {
+        if (scope === "all") {
           ics += foldLine(`SUMMARY:${escapeICSText(shift.name)} (${shift.assignments?.length || 0}/${shift.requiredEmployees})`) + "\r\n";
         } else {
           ics += foldLine(`SUMMARY:${escapeICSText(shift.name)}`) + "\r\n";
