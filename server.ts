@@ -3632,8 +3632,27 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
+    // Vite fingerprints every file under dist/assets with a content hash
+    // (e.g. assets/index-a1b2c3.js), so those are safe to cache aggressively -
+    // a new deploy produces new filenames. index.html is NOT fingerprinted and
+    // references those hashed filenames, so it must never be cached; otherwise
+    // browsers can keep serving a stale index.html that points at
+    // JS/CSS bundles which no longer exist after the next build, causing a
+    // blank page until the user manually clears their cache.
+    app.use(
+      express.static(distPath, {
+        index: false, // never let express.static implicitly serve/cache index.html
+        setHeaders: (res, filePath) => {
+          if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+            res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+          } else {
+            res.setHeader("Cache-Control", "no-cache");
+          }
+        },
+      })
+    );
     app.get("*", (req, res) => {
+      res.setHeader("Cache-Control", "no-cache");
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
