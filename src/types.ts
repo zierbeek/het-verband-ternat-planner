@@ -27,6 +27,7 @@ export interface Shift {
   notes?: string;
   isRecurring: boolean;
   recurrencePattern?: string;
+  templateId?: string | null;
   assignments?: ShiftAssignment[];
 }
 
@@ -38,6 +39,22 @@ export interface ShiftPreset {
   color: string;
   order: number;
   defaultEmployeeId?: string | null;
+}
+
+export interface ShiftTemplate {
+  id: string;
+  name: string;
+  startTime: string;
+  endTime: string;
+  color: string;
+  requiredEmployees: number;
+  notes?: string | null;
+  daysOfWeek: string; // JSON-encoded array of ints, 0=Sunday..6=Saturday
+  recurrencePattern: "WEEKLY" | "BIWEEKLY";
+  startDate: string;
+  endDate?: string | null;
+  defaultEmployeeId?: string | null;
+  isActive: boolean;
 }
 
 export interface ShiftAssignment {

@@ -48,6 +48,7 @@ model Shift {
   requiredEmployees Int               @default(1)
   notes             String?
   templateId        String?
+  template          ShiftTemplate?    @relation(fields: [templateId], references: [id], onDelete: SetNull)
   isRecurring       Boolean           @default(false)
   recurrencePattern String?           // "DAILY", "WEEKLY", "BIWEEKLY", "MONTHLY"
   createdAt         DateTime          @default(now())
@@ -55,6 +56,31 @@ model Shift {
   assignments       ShiftAssignment[]
   swaps             SwapRequest[]     @relation("RequesterShift")
   targetSwaps       SwapRequest[]     @relation("TargetShift")
+}
+
+// A reusable, named shift definition that can generate real Shift rows on a
+// recurring schedule (e.g. "Nachtdienst weekend" every Sat+Sun, 23:00-07:00,
+// for the next 3 months). Distinct from ShiftPreset, which only fills in the
+// "Nieuwe Shift" form / quick-planning slots for a single shift at a time -
+// a ShiftTemplate additionally owns a recurrence rule and can bulk-generate
+// the Shift rows for a date range in one action.
+model ShiftTemplate {
+  id                String    @id @default(uuid())
+  name              String
+  startTime         String    // "HH:MM"
+  endTime           String    // "HH:MM"
+  color             String    @default("#8b5cf6")
+  requiredEmployees Int       @default(1)
+  notes             String?
+  daysOfWeek        String    @default("[]") // JSON list of ints, 0=Sunday..6=Saturday
+  recurrencePattern String    @default("WEEKLY") // "WEEKLY", "BIWEEKLY"
+  startDate         String    // "YYYY-MM-DD" - first date the pattern can apply from
+  endDate           String?   // "YYYY-MM-DD" - optional last date the pattern can apply to
+  defaultEmployeeId String?
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  generatedShifts   Shift[]
 }
 
 // Admin-configurable presets that populate the quick-planning slots in the

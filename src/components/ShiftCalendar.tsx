@@ -14,8 +14,12 @@ import {
   Pencil,
   Trash2,
   X,
+  CheckSquare,
+  Square,
+  Repeat,
+  CalendarClock,
 } from "lucide-react";
-import { Shift, Employee, ShiftPreset } from "../types.js";
+import { Shift, Employee, ShiftPreset, ShiftTemplate } from "../types.js";
 import { getUserColorStyle } from "../utils/userColor.ts";
 
 interface ShiftCalendarProps {
@@ -62,6 +66,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [presets, setPresets] = useState<ShiftPreset[]>([]);
+  const [templates, setTemplates] = useState<ShiftTemplate[]>([]);
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [viewType, setViewType] = useState<"month" | "week" | "day">("week");
   const [selectedEmployeeFilter, setSelectedEmployeeFilter] = useState<string>("all");
@@ -74,6 +79,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
 
   // Preset management modal state
   const [isPresetsModalOpen, setIsPresetsModalOpen] = useState(false);
+  const [isTemplatesModalOpen, setIsTemplatesModalOpen] = useState(false);
   const [newPresetLabel, setNewPresetLabel] = useState("");
   const [newPresetStart, setNewPresetStart] = useState("06:00");
   const [newPresetEnd, setNewPresetEnd] = useState("14:00");
@@ -81,6 +87,31 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
   const [newPresetDefaultEmployeeId, setNewPresetDefaultEmployeeId] = useState("");
   const [editingPresetId, setEditingPresetId] = useState<string | null>(null);
   const [editPresetDraft, setEditPresetDraft] = useState<{ label: string; startTime: string; endTime: string; color: string; defaultEmployeeId: string } | null>(null);
+
+  // Shift template (recurring pattern) management state
+  const DOW_LABELS = ["Zo", "Ma", "Di", "Wo", "Do", "Vr", "Za"];
+  const [templateFormMode, setTemplateFormMode] = useState<"list" | "create" | "edit">("list");
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [templateName, setTemplateName] = useState("");
+  const [templateStart, setTemplateStart] = useState("07:00");
+  const [templateEnd, setTemplateEnd] = useState("15:00");
+  const [templateColor, setTemplateColor] = useState("#8b5cf6");
+  const [templateRequiredEmployees, setTemplateRequiredEmployees] = useState(1);
+  const [templateNotes, setTemplateNotes] = useState("");
+  const [templateDaysOfWeek, setTemplateDaysOfWeek] = useState<number[]>([]);
+  const [templateRecurrence, setTemplateRecurrence] = useState<"WEEKLY" | "BIWEEKLY">("WEEKLY");
+  const [templateStartDate, setTemplateStartDate] = useState(new Date().toISOString().split("T")[0]);
+  const [templateEndDate, setTemplateEndDate] = useState("");
+  const [templateDefaultEmployeeId, setTemplateDefaultEmployeeId] = useState("");
+  const [isTemplateSubmitting, setIsTemplateSubmitting] = useState(false);
+  const [templateDeleteConfirmId, setTemplateDeleteConfirmId] = useState<string | null>(null);
+
+  // Generate-from-template panel state
+  const [generatingTemplateId, setGeneratingTemplateId] = useState<string | null>(null);
+  const [generateRangeStart, setGenerateRangeStart] = useState(new Date().toISOString().split("T")[0]);
+  const [generateRangeEnd, setGenerateRangeEnd] = useState("");
+  const [generateAssignEmployee, setGenerateAssignEmployee] = useState(true);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   // Form states for Create Shift
   const [shiftName, setShiftName] = useState("Voormiddag");
@@ -102,6 +133,16 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
   const [targetMonth, setTargetMonth] = useState("");
   const [copyEmployees, setCopyEmployees] = useState(true);
 
+  // --- Bulk shift selection & operations ---
+  const [isBulkMode, setIsBulkMode] = useState(false);
+  const [selectedShiftIds, setSelectedShiftIds] = useState<string[]>([]);
+  const [isBulkActionOpen, setIsBulkActionOpen] = useState(false);
+  const [bulkAction, setBulkAction] = useState<"assign" | "shift-dates" | "delete">("assign");
+  const [bulkAssignEmployeeId, setBulkAssignEmployeeId] = useState("");
+  const [bulkDayOffset, setBulkDayOffset] = useState(7);
+  const [isBulkDeleteConfirmOpen, setIsBulkDeleteConfirmOpen] = useState(false);
+  const [isBulkSubmitting, setIsBulkSubmitting] = useState(false);
+
   // Leave requests state
   const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
 
@@ -118,10 +159,217 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
     setFeedbackMessage({ text, type });
   };
 
+  const resetTemplateForm = () => {
+    setTemplateName("");
+    setTemplateStart("07:00");
+    setTemplateEnd("15:00");
+    setTemplateColor("#8b5cf6");
+    setTemplateRequiredEmployees(1);
+    setTemplateNotes("");
+    setTemplateDaysOfWeek([]);
+    setTemplateRecurrence("WEEKLY");
+    setTemplateStartDate(new Date().toISOString().split("T")[0]);
+    setTemplateEndDate("");
+    setTemplateDefaultEmployeeId("");
+    setEditingTemplateId(null);
+  };
+
+  const toggleTemplateDay = (day: number) => {
+    setTemplateDaysOfWeek((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort()));
+  };
+
+  const startEditingTemplate = (tmpl: ShiftTemplate) => {
+    setEditingTemplateId(tmpl.id);
+    setTemplateName(tmpl.name);
+    setTemplateStart(tmpl.startTime);
+    setTemplateEnd(tmpl.endTime);
+    setTemplateColor(tmpl.color);
+    setTemplateRequiredEmployees(tmpl.requiredEmployees);
+    setTemplateNotes(tmpl.notes || "");
+    let days: number[] = [];
+    try {
+      days = JSON.parse(tmpl.daysOfWeek || "[]");
+    } catch {
+      days = [];
+    }
+    setTemplateDaysOfWeek(days);
+    setTemplateRecurrence(tmpl.recurrencePattern);
+    setTemplateStartDate(tmpl.startDate);
+    setTemplateEndDate(tmpl.endDate || "");
+    setTemplateDefaultEmployeeId(tmpl.defaultEmployeeId || "");
+    setTemplateFormMode("edit");
+  };
+
+  const handleTemplateSubmit = async () => {
+    if (!templateName || !templateStart || !templateEnd || templateDaysOfWeek.length === 0) {
+      showFeedback("Vul de naam, tijden en minstens één dag van de week in.", "error");
+      return;
+    }
+    setIsTemplateSubmitting(true);
+    try {
+      const payload = {
+        name: templateName,
+        startTime: templateStart,
+        endTime: templateEnd,
+        color: templateColor,
+        requiredEmployees: templateRequiredEmployees,
+        notes: templateNotes || null,
+        daysOfWeek: templateDaysOfWeek,
+        recurrencePattern: templateRecurrence,
+        startDate: templateStartDate,
+        endDate: templateEndDate || null,
+        defaultEmployeeId: templateDefaultEmployeeId || null,
+      };
+
+      const url = editingTemplateId ? `/api/shift-templates/${editingTemplateId}` : "/api/shift-templates";
+      const method = editingTemplateId ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        showFeedback(editingTemplateId ? "Sjabloon bijgewerkt!" : "Sjabloon aangemaakt!");
+        resetTemplateForm();
+        setTemplateFormMode("list");
+        fetchTemplates();
+      } else {
+        const err = await res.json();
+        showFeedback(err.error || "Fout bij het opslaan van het sjabloon", "error");
+      }
+    } catch (e) {
+      console.error(e);
+      showFeedback("Fout bij het verbinden met de server", "error");
+    } finally {
+      setIsTemplateSubmitting(false);
+    }
+  };
+
+  const handleTemplateDelete = async (templateId: string, deleteGeneratedShifts: boolean) => {
+    try {
+      const res = await fetch(`/api/shift-templates/${templateId}?deleteGeneratedShifts=${deleteGeneratedShifts}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        showFeedback("Sjabloon verwijderd!");
+        setTemplateDeleteConfirmId(null);
+        fetchTemplates();
+        fetchShifts();
+      } else {
+        const err = await res.json();
+        showFeedback(err.error || "Fout bij het verwijderen van het sjabloon", "error");
+      }
+    } catch (e) {
+      console.error(e);
+      showFeedback("Fout bij het verbinden met de server", "error");
+    }
+  };
+
+  const handleGenerateFromTemplate = async () => {
+    if (!generatingTemplateId || !generateRangeStart || !generateRangeEnd) return;
+    setIsGenerating(true);
+    try {
+      const res = await fetch(`/api/shift-templates/${generatingTemplateId}/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          rangeStart: generateRangeStart,
+          rangeEnd: generateRangeEnd,
+          assignEmployee: generateAssignEmployee,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const notes = [];
+        if (data.skippedExisting) notes.push(`${data.skippedExisting} al bestaand`);
+        if (data.skippedConflicts) notes.push(`${data.skippedConflicts} overgeslagen door conflict`);
+        showFeedback(`${data.count} shift(en) gegenereerd${notes.length ? ` (${notes.join(", ")})` : ""}!`);
+        setGeneratingTemplateId(null);
+        setGenerateRangeEnd("");
+        fetchShifts();
+      } else {
+        const err = await res.json();
+        showFeedback(err.error || "Fout bij het genereren van shifts", "error");
+      }
+    } catch (e) {
+      console.error(e);
+      showFeedback("Fout bij het verbinden met de server", "error");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   const openShiftEditor = (shift: Shift) => {
     setSelectedShift(shift);
     setEditEmployeeId(shift.assignments?.[0]?.employeeId || "");
     setIsEditModalOpen(true);
+  };
+
+  const toggleShiftSelection = (shiftId: string) => {
+    setSelectedShiftIds((prev) =>
+      prev.includes(shiftId) ? prev.filter((id) => id !== shiftId) : [...prev, shiftId]
+    );
+  };
+
+  const exitBulkMode = () => {
+    setIsBulkMode(false);
+    setSelectedShiftIds([]);
+    setIsBulkActionOpen(false);
+  };
+
+  const handleBulkSubmit = async () => {
+    if (selectedShiftIds.length === 0) return;
+    setIsBulkSubmitting(true);
+    try {
+      let url = "";
+      let body: any = { shiftIds: selectedShiftIds };
+
+      if (bulkAction === "assign") {
+        url = "/api/shifts/bulk-assign";
+        body.employeeId = bulkAssignEmployeeId || null;
+      } else if (bulkAction === "shift-dates") {
+        url = "/api/shifts/bulk-shift-dates";
+        body.dayOffset = Number(bulkDayOffset);
+      } else {
+        url = "/api/shifts/bulk-delete";
+      }
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const conflictNote = data.skippedConflicts ? ` (${data.skippedConflicts} overgeslagen door dubbele boeking)` : "";
+        showFeedback(
+          bulkAction === "assign"
+            ? `${data.count} shift(en) bijgewerkt${conflictNote}!`
+            : bulkAction === "shift-dates"
+            ? `${data.count} shift(en) verplaatst${conflictNote}!`
+            : `${data.count} shift(en) verwijderd!`
+        );
+        setIsBulkActionOpen(false);
+        setIsBulkDeleteConfirmOpen(false);
+        exitBulkMode();
+        fetchShifts();
+      } else {
+        const err = await res.json();
+        showFeedback(err.error || "Fout bij de bulkbewerking", "error");
+      }
+    } catch (e) {
+      console.error(e);
+      showFeedback("Fout bij het verbinden met de server", "error");
+    } finally {
+      setIsBulkSubmitting(false);
+    }
   };
 
   useEffect(() => {
@@ -211,6 +459,20 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
     }
   };
 
+  const fetchTemplates = async () => {
+    try {
+      const res = await fetch("/api/shift-templates", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTemplates(data);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const fetchLeaveRequests = async () => {
     try {
       const res = await fetch("/api/leave-requests?all=true", {
@@ -229,6 +491,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
     fetchShifts();
     fetchEmployees();
     fetchPresets();
+    fetchTemplates();
     fetchLeaveRequests();
   }, [currentDate, selectedEmployeeFilter, token]);
 
@@ -769,10 +1032,26 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
             {user.role === "ADMINISTRATOR" && (
               <>
                 <button
+                  onClick={() => (isBulkMode ? exitBulkMode() : setIsBulkMode(true))}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold transition cursor-pointer ${
+                    isBulkMode
+                      ? "border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
+                      : "border-slate-200 hover:bg-slate-50 text-slate-700"
+                  }`}
+                >
+                  <CheckSquare className="h-3.5 w-3.5" /> {isBulkMode ? "Selectie Sluiten" : "Bulk Bewerken"}
+                </button>
+                <button
                   onClick={() => setIsCopyWeekOpen(true)}
                   className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 hover:bg-slate-50 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold text-slate-700 transition cursor-pointer"
                 >
                   <Copy className="h-3.5 w-3.5" /> Week Kopiëren
+                </button>
+                <button
+                  onClick={() => setIsTemplatesModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 hover:bg-slate-50 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold text-slate-700 transition cursor-pointer"
+                >
+                  <Repeat className="h-3.5 w-3.5" /> Terugkerende Sjablonen
                 </button>
                 <button
                   onClick={() => {
@@ -785,6 +1064,56 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                 </button>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Selection Action Bar */}
+      {isBulkMode && (
+        <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-2 bg-slate-900 text-white rounded-2xl px-4 py-3 mb-3 shadow-md">
+          <div className="flex items-center gap-2 text-xs sm:text-sm font-semibold">
+            <CheckSquare className="h-4 w-4 text-blue-400" />
+            {selectedShiftIds.length} shift(en) geselecteerd
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setBulkAction("assign");
+                setBulkAssignEmployeeId("");
+                setIsBulkActionOpen(true);
+              }}
+              disabled={selectedShiftIds.length === 0}
+              className="px-3 py-1.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold bg-white/10 hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+            >
+              Medewerker toewijzen
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setBulkAction("shift-dates");
+                setIsBulkActionOpen(true);
+              }}
+              disabled={selectedShiftIds.length === 0}
+              className="px-3 py-1.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold bg-white/10 hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+            >
+              Data verschuiven
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsBulkDeleteConfirmOpen(true)}
+              disabled={selectedShiftIds.length === 0}
+              className="px-3 py-1.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold bg-red-500/20 text-red-200 hover:bg-red-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+            >
+              Verwijderen
+            </button>
+            <button
+              type="button"
+              onClick={exitBulkMode}
+              className="px-3 py-1.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold border border-white/20 hover:bg-white/10 transition cursor-pointer"
+            >
+              Annuleren
+            </button>
           </div>
         </div>
       )}
@@ -821,14 +1150,19 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                           <div
                             key={shift.id}
                             onClick={() => {
-                              if (user.role === "ADMINISTRATOR") {
+                              if (isBulkMode) {
+                                toggleShiftSelection(shift.id);
+                              } else if (user.role === "ADMINISTRATOR") {
                                 openShiftEditor(shift);
                               }
                             }}
                             style={{ backgroundColor: shift.color + "22", borderLeftColor: shift.color }}
-                            className="px-1.5 py-0.5 border-l-2 rounded-r text-[10px] font-semibold text-slate-800 cursor-pointer hover:opacity-85 transition truncate"
+                            className={`px-1.5 py-0.5 border-l-2 rounded-r text-[10px] font-semibold text-slate-800 cursor-pointer hover:opacity-85 transition truncate ${
+                              isBulkMode && selectedShiftIds.includes(shift.id) ? "ring-2 ring-blue-400" : ""
+                            }`}
                             title={`${shift.name} (${shift.startTime}-${shift.endTime})`}
                           >
+                            {isBulkMode && (selectedShiftIds.includes(shift.id) ? "☑ " : "☐ ")}
                             {shift.startTime} {shift.name}
                           </div>
                         ))}
@@ -957,18 +1291,33 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                                   slot.shifts.map((shift) => (
                                     <div
                                       key={shift.id}
-                                      draggable={user.role === "ADMINISTRATOR" && window.innerWidth > 768}
+                                      draggable={!isBulkMode && user.role === "ADMINISTRATOR" && window.innerWidth > 768}
                                       onDragStart={() => setDraggedItem({ type: "shift", shiftId: shift.id })}
                                       onDragEnd={() => setDraggedItem(null)}
                                       onClick={() => {
-                                        if (user.role === "ADMINISTRATOR") {
+                                        if (isBulkMode) {
+                                          toggleShiftSelection(shift.id);
+                                        } else if (user.role === "ADMINISTRATOR") {
                                           openShiftEditor(shift);
                                         }
                                       }}
                                       style={{ borderLeftColor: shift.color }}
-                                      className="p-2 border-l-4 rounded-r-xl bg-white hover:bg-slate-50 border border-slate-200 transition cursor-pointer flex flex-col gap-1 shadow-2xs"
+                                      className={`p-2 border-l-4 rounded-r-xl bg-white hover:bg-slate-50 border transition cursor-pointer flex flex-col gap-1 shadow-2xs ${
+                                        isBulkMode && selectedShiftIds.includes(shift.id)
+                                          ? "border-blue-400 ring-2 ring-blue-400 bg-blue-50/60"
+                                          : "border-slate-200"
+                                      }`}
                                     >
-                                      <span className="font-bold text-slate-800 text-[11px] truncate">{shift.name}</span>
+                                      <div className="flex items-center gap-1.5">
+                                        {isBulkMode && (
+                                          selectedShiftIds.includes(shift.id) ? (
+                                            <CheckSquare className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                                          ) : (
+                                            <Square className="h-3.5 w-3.5 text-slate-300 shrink-0" />
+                                          )
+                                        )}
+                                        <span className="font-bold text-slate-800 text-[11px] truncate">{shift.name}</span>
+                                      </div>
                                       <div className="flex items-center gap-1 text-[10px] text-slate-500 font-medium">
                                         <Clock className="h-3 w-3 shrink-0" /> {shift.startTime} - {shift.endTime}
                                       </div>
@@ -1109,14 +1458,26 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                   <div
                     key={shift.id}
                     onClick={() => {
-                      if (user.role === "ADMINISTRATOR") {
+                      if (isBulkMode) {
+                        toggleShiftSelection(shift.id);
+                      } else if (user.role === "ADMINISTRATOR") {
                         openShiftEditor(shift);
                       }
                     }}
                     style={{ borderLeftColor: shift.color }}
-                    className="p-5 border-l-4 rounded-r-2xl bg-slate-50/50 hover:bg-slate-50 transition border border-slate-200 flex justify-between items-center cursor-pointer shadow-2xs"
+                    className={`p-5 border-l-4 rounded-r-2xl bg-slate-50/50 hover:bg-slate-50 transition border flex justify-between items-center cursor-pointer shadow-2xs ${
+                      isBulkMode && selectedShiftIds.includes(shift.id) ? "border-blue-400 ring-2 ring-blue-400" : "border-slate-200"
+                    }`}
                   >
-                    <div>
+                    <div className="flex items-center gap-3">
+                      {isBulkMode && (
+                        selectedShiftIds.includes(shift.id) ? (
+                          <CheckSquare className="h-4 w-4 text-blue-600 shrink-0" />
+                        ) : (
+                          <Square className="h-4 w-4 text-slate-300 shrink-0" />
+                        )
+                      )}
+                      <div>
                       <h4 className="font-bold text-slate-800 text-sm">{shift.name}</h4>
                       <div className="flex items-center gap-2.5 sm:p-3 text-xs sm:text-sm text-slate-500 mt-1">
                         <span className="flex items-center gap-1 font-mono">
@@ -1132,6 +1493,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                           Opmerkingen: {shift.notes}
                         </p>
                       )}
+                      </div>
                     </div>
 
                     <div className="flex flex-col items-end gap-1">
@@ -1530,6 +1892,118 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
         </div>
       )}
 
+      {/* BULK SHIFT ACTION MODAL */}
+      {isBulkActionOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex justify-center items-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-200">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-1.5">
+                <CheckSquare className="h-5 w-5 text-blue-500" />
+                {bulkAction === "assign" ? "Medewerker Toewijzen" : "Data Verschuiven"}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsBulkActionOpen(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="text-xs sm:text-sm text-slate-500">
+              Deze bewerking wordt toegepast op {selectedShiftIds.length} geselecteerde shift(en). Shifts die tot een
+              dubbele boeking zouden leiden, worden overgeslagen.
+            </p>
+
+            {bulkAction === "assign" && (
+              <div>
+                <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  Medewerker
+                </label>
+                <select
+                  value={bulkAssignEmployeeId}
+                  onChange={(e) => setBulkAssignEmployeeId(e.target.value)}
+                  className="block w-full px-3 py-2 border border-slate-300 rounded-lg sm:rounded-xl text-sm"
+                >
+                  <option value="">-- Alle geselecteerde shifts onbezet maken --</option>
+                  {employees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.user?.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {bulkAction === "shift-dates" && (
+              <div>
+                <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  Aantal dagen verschuiven
+                </label>
+                <input
+                  type="number"
+                  value={bulkDayOffset}
+                  onChange={(e) => setBulkDayOffset(Number(e.target.value))}
+                  className="block w-full px-3 py-2 border border-slate-300 rounded-lg sm:rounded-xl text-sm"
+                  placeholder="Bijv. 7 (vooruit) of -7 (terug)"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">Positief getal = vooruit in de tijd, negatief = terug.</p>
+              </div>
+            )}
+
+            <div className="flex gap-2 justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setIsBulkActionOpen(false)}
+                className="px-4 py-2 border border-slate-200 hover:bg-slate-50 rounded-lg sm:rounded-xl font-semibold text-slate-600 transition cursor-pointer"
+              >
+                Annuleren
+              </button>
+              <button
+                type="button"
+                disabled={isBulkSubmitting || (bulkAction === "shift-dates" && !bulkDayOffset)}
+                onClick={handleBulkSubmit}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg sm:rounded-xl font-semibold text-white transition shadow-xs cursor-pointer"
+              >
+                {isBulkSubmitting ? "Bezig..." : "Toepassen"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BULK DELETE CONFIRM MODAL */}
+      {isBulkDeleteConfirmOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex justify-center items-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-200">
+            <h3 className="text-lg font-bold text-slate-900">Shifts Verwijderen</h3>
+            <p className="text-xs sm:text-sm text-slate-600">
+              Weet u zeker dat u <strong>{selectedShiftIds.length}</strong> geselecteerde shift(en) wilt verwijderen?
+              Dit kan niet ongedaan gemaakt worden.
+            </p>
+            <div className="flex gap-2 justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setIsBulkDeleteConfirmOpen(false)}
+                className="px-4 py-2 border border-slate-200 hover:bg-slate-50 rounded-lg sm:rounded-xl font-semibold text-slate-600 transition cursor-pointer"
+              >
+                Annuleren
+              </button>
+              <button
+                type="button"
+                disabled={isBulkSubmitting}
+                onClick={() => {
+                  setBulkAction("delete");
+                  handleBulkSubmit();
+                }}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg sm:rounded-xl font-semibold text-white transition shadow-xs cursor-pointer"
+              >
+                {isBulkSubmitting ? "Bezig..." : "Ja, verwijderen"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MANAGE SHIFT PRESETS MODAL */}
       {isPresetsModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex justify-center items-center p-4 z-50">
@@ -1725,6 +2199,389 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                 <Plus className="h-4 w-4" /> Preset Toevoegen
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MANAGE SHIFT TEMPLATES / RECURRING PATTERNS MODAL */}
+      {isTemplatesModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex justify-center items-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-xl border border-slate-200 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-1.5">
+                <Repeat className="h-5 w-5 text-purple-500" /> Terugkerende Sjablonen
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsTemplatesModalOpen(false);
+                  setTemplateFormMode("list");
+                  resetTemplateForm();
+                  setGeneratingTemplateId(null);
+                }}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="text-xs sm:text-sm text-slate-500">
+              Een sjabloon definieert een terugkerende shift (bv. elke maandag en dinsdag, 07:00-15:00). Gebruik
+              "Genereren" om er echte shifts van te maken voor een bepaalde periode.
+            </p>
+
+            {templateFormMode === "list" && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetTemplateForm();
+                    setTemplateFormMode("create");
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg sm:rounded-xl font-semibold text-white text-sm transition shadow-xs cursor-pointer"
+                >
+                  <Plus className="h-4 w-4" /> Nieuw Sjabloon
+                </button>
+
+                <div className="space-y-2">
+                  {templates.length === 0 && (
+                    <p className="text-xs sm:text-sm text-slate-400 text-center py-4">Nog geen sjablonen aangemaakt.</p>
+                  )}
+                  {templates.map((tmpl) => {
+                    let days: number[] = [];
+                    try {
+                      days = JSON.parse(tmpl.daysOfWeek || "[]");
+                    } catch {
+                      days = [];
+                    }
+                    return (
+                      <div key={tmpl.id} className="border border-slate-200 rounded-xl p-3 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span
+                              className="h-3 w-3 rounded-full shrink-0"
+                              style={{ backgroundColor: tmpl.color }}
+                            />
+                            <div className="min-w-0">
+                              <p className="font-bold text-sm text-slate-800 truncate">
+                                {tmpl.name}
+                                {!tmpl.isActive && (
+                                  <span className="ml-1.5 text-[10px] font-semibold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full">
+                                    Inactief
+                                  </span>
+                                )}
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                {tmpl.startTime} - {tmpl.endTime} • {tmpl.recurrencePattern === "BIWEEKLY" ? "Om de 2 weken" : "Wekelijks"} •{" "}
+                                {days.map((d) => DOW_LABELS[d]).join(", ")}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setGeneratingTemplateId(tmpl.id);
+                                setGenerateRangeStart(new Date().toISOString().split("T")[0]);
+                                setGenerateRangeEnd("");
+                              }}
+                              title="Genereren"
+                              className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg transition cursor-pointer"
+                            >
+                              <CalendarClock className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => startEditingTemplate(tmpl)}
+                              title="Bewerken"
+                              className="p-1.5 text-slate-500 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setTemplateDeleteConfirmId(tmpl.id)}
+                              title="Verwijderen"
+                              className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {generatingTemplateId === tmpl.id && (
+                          <div className="bg-purple-50/60 border border-purple-100 rounded-lg p-3 space-y-2">
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                                  Van
+                                </label>
+                                <input
+                                  type="date"
+                                  value={generateRangeStart}
+                                  onChange={(e) => setGenerateRangeStart(e.target.value)}
+                                  className="block w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                                  Tot
+                                </label>
+                                <input
+                                  type="date"
+                                  value={generateRangeEnd}
+                                  onChange={(e) => setGenerateRangeEnd(e.target.value)}
+                                  className="block w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs"
+                                />
+                              </div>
+                            </div>
+                            {tmpl.defaultEmployeeId && (
+                              <label className="flex items-center gap-1.5 text-xs text-slate-600 font-medium">
+                                <input
+                                  type="checkbox"
+                                  checked={generateAssignEmployee}
+                                  onChange={(e) => setGenerateAssignEmployee(e.target.checked)}
+                                  className="rounded border-slate-300"
+                                />
+                                Standaard medewerker meteen toewijzen
+                              </label>
+                            )}
+                            <div className="flex gap-2 justify-end">
+                              <button
+                                type="button"
+                                onClick={() => setGeneratingTemplateId(null)}
+                                className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 rounded-lg text-xs font-semibold text-slate-600 transition cursor-pointer"
+                              >
+                                Annuleren
+                              </button>
+                              <button
+                                type="button"
+                                disabled={isGenerating || !generateRangeEnd}
+                                onClick={handleGenerateFromTemplate}
+                                className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-xs font-semibold text-white transition cursor-pointer"
+                              >
+                                {isGenerating ? "Bezig..." : "Shifts Genereren"}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {templateDeleteConfirmId === tmpl.id && (
+                          <div className="bg-red-50 border border-red-100 rounded-lg p-3 space-y-2">
+                            <p className="text-xs text-red-700">
+                              Sjabloon "{tmpl.name}" verwijderen? Reeds gegenereerde shifts kunnen behouden blijven
+                              (als losse shifts) of mee verwijderd worden.
+                            </p>
+                            <div className="flex flex-wrap gap-2 justify-end">
+                              <button
+                                type="button"
+                                onClick={() => setTemplateDeleteConfirmId(null)}
+                                className="px-3 py-1.5 border border-slate-200 hover:bg-white rounded-lg text-xs font-semibold text-slate-600 transition cursor-pointer"
+                              >
+                                Annuleren
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleTemplateDelete(tmpl.id, false)}
+                                className="px-3 py-1.5 border border-red-200 hover:bg-red-100 rounded-lg text-xs font-semibold text-red-700 transition cursor-pointer"
+                              >
+                                Sjabloon Verwijderen, Shifts Behouden
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleTemplateDelete(tmpl.id, true)}
+                                className="px-3 py-1.5 bg-red-600 hover:bg-red-700 rounded-lg text-xs font-semibold text-white transition cursor-pointer"
+                              >
+                                Alles Verwijderen
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {(templateFormMode === "create" || templateFormMode === "edit") && (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-500 mb-1">
+                    Naam
+                  </label>
+                  <input
+                    type="text"
+                    value={templateName}
+                    onChange={(e) => setTemplateName(e.target.value)}
+                    className="block w-full px-3 py-2 border border-slate-300 rounded-lg sm:rounded-xl text-sm"
+                    placeholder="Bijv. Nachtdienst weekend"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-500 mb-1">
+                      Starttijd
+                    </label>
+                    <input
+                      type="time"
+                      value={templateStart}
+                      onChange={(e) => setTemplateStart(e.target.value)}
+                      className="block w-full px-3 py-2 border border-slate-300 rounded-lg sm:rounded-xl text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-500 mb-1">
+                      Eindtijd
+                    </label>
+                    <input
+                      type="time"
+                      value={templateEnd}
+                      onChange={(e) => setTemplateEnd(e.target.value)}
+                      className="block w-full px-3 py-2 border border-slate-300 rounded-lg sm:rounded-xl text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-500 mb-1">
+                    Dagen van de week
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {DOW_LABELS.map((label, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => toggleTemplateDay(idx)}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer ${
+                          templateDaysOfWeek.includes(idx)
+                            ? "bg-purple-600 border-purple-600 text-white"
+                            : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-500 mb-1">
+                      Herhaling
+                    </label>
+                    <select
+                      value={templateRecurrence}
+                      onChange={(e) => setTemplateRecurrence(e.target.value as "WEEKLY" | "BIWEEKLY")}
+                      className="block w-full px-3 py-2 border border-slate-300 rounded-lg sm:rounded-xl text-sm"
+                    >
+                      <option value="WEEKLY">Elke week</option>
+                      <option value="BIWEEKLY">Om de 2 weken</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-500 mb-1">
+                      Benodigd aantal
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={templateRequiredEmployees}
+                      onChange={(e) => setTemplateRequiredEmployees(Number(e.target.value))}
+                      className="block w-full px-3 py-2 border border-slate-300 rounded-lg sm:rounded-xl text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-500 mb-1">
+                      Startdatum patroon
+                    </label>
+                    <input
+                      type="date"
+                      value={templateStartDate}
+                      onChange={(e) => setTemplateStartDate(e.target.value)}
+                      className="block w-full px-3 py-2 border border-slate-300 rounded-lg sm:rounded-xl text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-500 mb-1">
+                      Einddatum (optioneel)
+                    </label>
+                    <input
+                      type="date"
+                      value={templateEndDate}
+                      onChange={(e) => setTemplateEndDate(e.target.value)}
+                      className="block w-full px-3 py-2 border border-slate-300 rounded-lg sm:rounded-xl text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-500 mb-1">
+                    Kleur
+                  </label>
+                  <input
+                    type="color"
+                    value={templateColor}
+                    onChange={(e) => setTemplateColor(e.target.value)}
+                    className="h-9 w-16 border border-slate-300 rounded-lg cursor-pointer"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-500 mb-1">
+                    Standaard medewerker (optioneel)
+                  </label>
+                  <select
+                    value={templateDefaultEmployeeId}
+                    onChange={(e) => setTemplateDefaultEmployeeId(e.target.value)}
+                    className="block w-full px-3 py-2 border border-slate-300 rounded-lg sm:rounded-xl text-sm"
+                  >
+                    <option value="">-- Geen (onbezet genereren) --</option>
+                    {employees.map((emp) => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.user?.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-500 mb-1">
+                    Notities (optioneel)
+                  </label>
+                  <input
+                    type="text"
+                    value={templateNotes}
+                    onChange={(e) => setTemplateNotes(e.target.value)}
+                    className="block w-full px-3 py-2 border border-slate-300 rounded-lg sm:rounded-xl text-sm"
+                  />
+                </div>
+
+                <div className="flex gap-2 justify-end pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      resetTemplateForm();
+                      setTemplateFormMode("list");
+                    }}
+                    className="px-4 py-2 border border-slate-200 hover:bg-slate-50 rounded-lg sm:rounded-xl font-semibold text-slate-600 transition cursor-pointer"
+                  >
+                    Annuleren
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isTemplateSubmitting}
+                    onClick={handleTemplateSubmit}
+                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg sm:rounded-xl font-semibold text-white transition shadow-xs cursor-pointer"
+                  >
+                    {isTemplateSubmitting ? "Bezig..." : editingTemplateId ? "Sjabloon Bijwerken" : "Sjabloon Aanmaken"}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

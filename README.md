@@ -24,6 +24,8 @@ Een webapplicatie voor personeelsplanning bij **Thuisverpleging Het Verband Tern
 - Medewerkers (en beheerders zelf) toewijzen aan diensten, met automatische controle op dubbele boekingen (overlappende diensten).
 - Herbruikbare dienst-presets (bv. "Voormiddag 07:00–15:00") beheren.
 - Een week of maand kopiëren of laten herhalen over meerdere weken.
+- **Bulkbewerkingen**: via "Bulk Bewerken" meerdere diensten tegelijk selecteren (week-, maand- of dagweergave) en in één actie een medewerker toewijzen/onbezet maken, verschuiven met een aantal dagen, of verwijderen — met dezelfde controle op dubbele boekingen en een overzicht van overgeslagen conflicten.
+- **Terugkerende sjablonen**: een herbruikbaar dienstsjabloon aanmaken met een naam, tijdstip, dagen van de week en een wekelijks/tweewekelijks patroon binnen een periode, en daaruit op elk moment echte diensten genereren voor een gekozen tijdsvenster (herhaald genereren slaat reeds aangemaakte data over).
 - Verlofaanvragen en ruilvoorstellen goedkeuren of weigeren (via de app of via een actieknop in de e-mail).
 - Gebruikers beheren: aanmaken, rol wijzigen, wachtwoord resetten, verwijderen.
 - Mededelingen plaatsen voor het hele team.
@@ -157,7 +159,7 @@ Een wissel- of verlofaanvraag heeft slechts de goedkeuring van **één** beheerd
 De belangrijkste modellen (zie `prisma/schema.prisma` voor het volledige schema):
 
 - **`User`** / **`Employee`** — accountgegevens respectievelijk planningsgerelateerde profielgegevens (voorkeuren, beschikbaarheid).
-- **`Shift`** / **`ShiftAssignment`** / **`ShiftPreset`** — diensten, de koppeling met medewerkers, en herbruikbare sjablonen.
+- **`Shift`** / **`ShiftAssignment`** / **`ShiftPreset`** / **`ShiftTemplate`** — diensten, de koppeling met medewerkers, herbruikbare eenmalige sjablonen (presets) en herbruikbare terugkerende sjablonen die op aanvraag echte diensten genereren.
 - **`LeaveRequest`** — verlofaanvragen (vakantie, ziekte, opleiding, persoonlijk) met status en goedkeuringshistoriek.
 - **`SwapRequest`** — ruilvoorstellen tussen medewerkers, met een statusverloop van voorstel → collega-reactie → beheerdersgoedkeuring.
 - **`ShiftChangeRequest`** — verzoeken tot tijdswijziging, afwezigheid of extra dienst op een bestaande toewijzing.

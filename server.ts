@@ -939,6 +939,193 @@ async function startServer() {
     }
   });
 
+  // ----------------------------------------------------
+  // BULK SHIFT OPERATIONS
+  // Operate on an explicit list of shift IDs at once (selected via the
+  // "Bulk bewerken" mode in the calendar). Each op re-validates against the
+  // double-booking restriction the same way the single-shift endpoints do,
+  // and reports per-shift outcomes so partial failures are still visible.
+  // ----------------------------------------------------
+
+  const MAX_BULK_SHIFTS = 500;
+
+  const loadBulkShifts = async (shiftIds: string[]) => {
+    return prisma.shift.findMany({
+      where: { id: { in: shiftIds } },
+      include: { assignments: true },
+    });
+  };
+
+  app.post("/api/shifts/bulk-delete", authenticate, requireAdmin, async (req: any, res) => {
+    const { shiftIds } = req.body;
+    if (!Array.isArray(shiftIds) || shiftIds.length === 0) {
+      return res.status(400).json({ error: "Geen shifts geselecteerd." });
+    }
+    if (shiftIds.length > MAX_BULK_SHIFTS) {
+      return res.status(400).json({ error: `Maximaal ${MAX_BULK_SHIFTS} shifts tegelijk.` });
+    }
+
+    try {
+      const shifts = await loadBulkShifts(shiftIds);
+      if (shifts.length === 0) {
+        return res.status(404).json({ error: "Geen van de geselecteerde shifts bestaat nog." });
+      }
+
+      const foundIds = shifts.map((s) => s.id);
+
+      await prisma.shiftChangeRequest.deleteMany({ where: { assignment: { shiftId: { in: foundIds } } } });
+      await prisma.shiftAssignment.deleteMany({ where: { shiftId: { in: foundIds } } });
+      await prisma.swapRequest.deleteMany({
+        where: { OR: [{ shiftId: { in: foundIds } }, { targetShiftId: { in: foundIds } }] },
+      });
+      await prisma.shift.deleteMany({ where: { id: { in: foundIds } } });
+
+      await logAction(req.user.id, "SHIFT_BULK_DELETE", `Bulk verwijderd: ${shifts.length} shift(en)`, shifts, null);
+      return res.json({ success: true, count: shifts.length, notFound: shiftIds.length - shifts.length });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/shifts/bulk-assign", authenticate, requireAdmin, async (req: any, res) => {
+    const { shiftIds, employeeId } = req.body;
+    if (!Array.isArray(shiftIds) || shiftIds.length === 0) {
+      return res.status(400).json({ error: "Geen shifts geselecteerd." });
+    }
+    if (shiftIds.length > MAX_BULK_SHIFTS) {
+      return res.status(400).json({ error: `Maximaal ${MAX_BULK_SHIFTS} shifts tegelijk.` });
+    }
+
+    try {
+      const shifts = await loadBulkShifts(shiftIds);
+      if (shifts.length === 0) {
+        return res.status(404).json({ error: "Geen van de geselecteerde shifts bestaat nog." });
+      }
+
+      let assignedEmployee: any = null;
+      if (employeeId) {
+        assignedEmployee = await prisma.employee.findUnique({ where: { id: employeeId }, include: { user: true } });
+        if (!assignedEmployee) {
+          return res.status(404).json({ error: "Medewerker niet gevonden." });
+        }
+      }
+
+      let updated = 0;
+      let skippedConflicts = 0;
+      const conflicts: { shiftId: string; name: string; date: string }[] = [];
+
+      for (const shift of shifts) {
+        if (employeeId) {
+          const conflict = await findBookingConflict(
+            employeeId,
+            { date: shift.date, startTime: shift.startTime, endTime: shift.endTime },
+            [shift.id]
+          );
+          if (conflict) {
+            skippedConflicts++;
+            conflicts.push({ shiftId: shift.id, name: shift.name, date: shift.date });
+            continue;
+          }
+        }
+
+        await prisma.shiftAssignment.deleteMany({ where: { shiftId: shift.id } });
+        if (employeeId) {
+          await prisma.shiftAssignment.create({
+            data: { shiftId: shift.id, employeeId, status: "ASSIGNED" },
+          });
+        }
+        updated++;
+      }
+
+      if (assignedEmployee && assignedEmployee.user.email && updated > 0) {
+        try {
+          await sendEmailNotification(
+            assignedEmployee.user.email,
+            "Meerdere shifts toegewezen - Het Verband Ternat",
+            `<h3>Beste ${assignedEmployee.user.name},</h3>
+             <p>U bent toegewezen aan ${updated} shift(en) op de planning. Bekijk uw rooster voor de details.</p>
+             <p>Met vriendelijke groet,<br>Het Verband Ternat Planner</p>`,
+            { platformUrl: getPublicBaseUrl(req), ctaLabel: "Bekijk uw planning" }
+          );
+        } catch (mailErr) {
+          console.error("Failed to send bulk assignment mail:", mailErr);
+        }
+      }
+
+      await logAction(
+        req.user.id,
+        "SHIFT_BULK_ASSIGN",
+        `Bulk toewijzing: ${updated} shift(en) ${employeeId ? `aan medewerker ${employeeId}` : "onbezet gemaakt"} (${skippedConflicts} overgeslagen door conflict)`
+      );
+      return res.json({ success: true, count: updated, skippedConflicts, conflicts });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/shifts/bulk-shift-dates", authenticate, requireAdmin, async (req: any, res) => {
+    const { shiftIds, dayOffset } = req.body;
+    if (!Array.isArray(shiftIds) || shiftIds.length === 0) {
+      return res.status(400).json({ error: "Geen shifts geselecteerd." });
+    }
+    if (shiftIds.length > MAX_BULK_SHIFTS) {
+      return res.status(400).json({ error: `Maximaal ${MAX_BULK_SHIFTS} shifts tegelijk.` });
+    }
+    const offset = Number(dayOffset);
+    if (!Number.isFinite(offset) || offset === 0) {
+      return res.status(400).json({ error: "Ongeldig aantal dagen om te verschuiven." });
+    }
+
+    try {
+      const shifts = await loadBulkShifts(shiftIds);
+      if (shifts.length === 0) {
+        return res.status(404).json({ error: "Geen van de geselecteerde shifts bestaat nog." });
+      }
+
+      let updated = 0;
+      let skippedConflicts = 0;
+      const conflicts: { shiftId: string; name: string; date: string }[] = [];
+
+      for (const shift of shifts) {
+        const [y, mo, d] = shift.date.split("-").map(Number);
+        const newDate = new Date(y, (mo || 1) - 1, (d || 1) + offset);
+        const newDateStr = newDate.toISOString().split("T")[0];
+
+        const assignedIds = shift.assignments.map((a) => a.employeeId);
+        let hasConflict = false;
+        for (const empId of assignedIds) {
+          const conflict = await findBookingConflict(
+            empId,
+            { date: newDateStr, startTime: shift.startTime, endTime: shift.endTime },
+            [shift.id]
+          );
+          if (conflict) {
+            hasConflict = true;
+            break;
+          }
+        }
+
+        if (hasConflict) {
+          skippedConflicts++;
+          conflicts.push({ shiftId: shift.id, name: shift.name, date: shift.date });
+          continue;
+        }
+
+        await prisma.shift.update({ where: { id: shift.id }, data: { date: newDateStr } });
+        updated++;
+      }
+
+      await logAction(
+        req.user.id,
+        "SHIFT_BULK_SHIFT_DATES",
+        `Bulk verschuiving: ${updated} shift(en) met ${offset} dag(en) (${skippedConflicts} overgeslagen door conflict)`
+      );
+      return res.json({ success: true, count: updated, skippedConflicts, conflicts });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post("/api/shifts/copy-week", authenticate, requireAdmin, async (req: any, res) => {
     const { sourceStartDate, targetStartDate, copyEmployees } = req.body;
     if (!sourceStartDate || !targetStartDate) {
@@ -1478,6 +1665,284 @@ async function startServer() {
       await prisma.shiftPreset.delete({ where: { id } });
       await logAction(req.user.id, "SHIFT_PRESET_DELETE", `Deleted shift preset: ${existing.label}`);
       return res.json({ success: true });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ----------------------------------------------------
+  // SHIFT TEMPLATES & RECURRING PATTERNS
+  // A ShiftTemplate stores a reusable shift definition plus a recurrence rule
+  // (days of week + WEEKLY/BIWEEKLY cadence, within an optional date range).
+  // /generate walks that rule across a requested window and materializes real
+  // Shift rows, skipping dates that already have a shift from this template so
+  // it is safe to re-run (e.g. to extend the window further into the future).
+  // ----------------------------------------------------
+
+  const MAX_TEMPLATE_GENERATE_DAYS = 366;
+
+  const parseDaysOfWeek = (raw: string): number[] => {
+    try {
+      const parsed = JSON.parse(raw || "[]");
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter((d: any) => Number.isInteger(d) && d >= 0 && d <= 6);
+    } catch {
+      return [];
+    }
+  };
+
+  app.get("/api/shift-templates", authenticate, async (req, res) => {
+    try {
+      const templates = await prisma.shiftTemplate.findMany({
+        orderBy: { createdAt: "asc" },
+      });
+      return res.json(templates);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/shift-templates", authenticate, requireAdmin, async (req: any, res) => {
+    const {
+      name, startTime, endTime, color, requiredEmployees, notes,
+      daysOfWeek, recurrencePattern, startDate, endDate, defaultEmployeeId,
+    } = req.body;
+
+    if (!name || !startTime || !endTime || !startDate) {
+      return res.status(400).json({ error: "Naam, tijden en startdatum zijn verplicht." });
+    }
+    if (!Array.isArray(daysOfWeek) || daysOfWeek.length === 0) {
+      return res.status(400).json({ error: "Selecteer minstens één dag van de week." });
+    }
+    const validDays = daysOfWeek.filter((d: any) => Number.isInteger(d) && d >= 0 && d <= 6);
+    if (validDays.length === 0) {
+      return res.status(400).json({ error: "Ongeldige dagen van de week." });
+    }
+
+    try {
+      const template = await prisma.shiftTemplate.create({
+        data: {
+          name,
+          startTime,
+          endTime,
+          color: color || "#8b5cf6",
+          requiredEmployees: requiredEmployees !== undefined ? Number(requiredEmployees) : 1,
+          notes,
+          daysOfWeek: JSON.stringify(validDays),
+          recurrencePattern: recurrencePattern === "BIWEEKLY" ? "BIWEEKLY" : "WEEKLY",
+          startDate,
+          endDate: endDate || null,
+          defaultEmployeeId: defaultEmployeeId || null,
+        },
+      });
+      await logAction(req.user.id, "SHIFT_TEMPLATE_CREATE", `Created shift template: ${name}`);
+      return res.status(201).json(template);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/shift-templates/:id", authenticate, requireAdmin, async (req: any, res) => {
+    const { id } = req.params;
+    const {
+      name, startTime, endTime, color, requiredEmployees, notes,
+      daysOfWeek, recurrencePattern, startDate, endDate, defaultEmployeeId, isActive,
+    } = req.body;
+
+    try {
+      const existing = await prisma.shiftTemplate.findUnique({ where: { id } });
+      if (!existing) return res.status(404).json({ error: "Sjabloon niet gevonden." });
+
+      let daysOfWeekJson = existing.daysOfWeek;
+      if (daysOfWeek !== undefined) {
+        if (!Array.isArray(daysOfWeek) || daysOfWeek.length === 0) {
+          return res.status(400).json({ error: "Selecteer minstens één dag van de week." });
+        }
+        const validDays = daysOfWeek.filter((d: any) => Number.isInteger(d) && d >= 0 && d <= 6);
+        if (validDays.length === 0) {
+          return res.status(400).json({ error: "Ongeldige dagen van de week." });
+        }
+        daysOfWeekJson = JSON.stringify(validDays);
+      }
+
+      const updated = await prisma.shiftTemplate.update({
+        where: { id },
+        data: {
+          name: name !== undefined ? name : existing.name,
+          startTime: startTime !== undefined ? startTime : existing.startTime,
+          endTime: endTime !== undefined ? endTime : existing.endTime,
+          color: color !== undefined ? color : existing.color,
+          requiredEmployees: requiredEmployees !== undefined ? Number(requiredEmployees) : existing.requiredEmployees,
+          notes: notes !== undefined ? notes : existing.notes,
+          daysOfWeek: daysOfWeekJson,
+          recurrencePattern: recurrencePattern !== undefined
+            ? (recurrencePattern === "BIWEEKLY" ? "BIWEEKLY" : "WEEKLY")
+            : existing.recurrencePattern,
+          startDate: startDate !== undefined ? startDate : existing.startDate,
+          endDate: endDate !== undefined ? (endDate || null) : existing.endDate,
+          defaultEmployeeId: defaultEmployeeId !== undefined ? (defaultEmployeeId || null) : existing.defaultEmployeeId,
+          isActive: isActive !== undefined ? Boolean(isActive) : existing.isActive,
+        },
+      });
+      await logAction(req.user.id, "SHIFT_TEMPLATE_UPDATE", `Updated shift template ${id}`, existing, updated);
+      return res.json(updated);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete("/api/shift-templates/:id", authenticate, requireAdmin, async (req: any, res) => {
+    const { id } = req.params;
+    const { deleteGeneratedShifts } = req.query;
+    try {
+      const existing = await prisma.shiftTemplate.findUnique({ where: { id } });
+      if (!existing) return res.status(404).json({ error: "Sjabloon niet gevonden." });
+
+      if (deleteGeneratedShifts === "true") {
+        const generated = await prisma.shift.findMany({ where: { templateId: id } });
+        const generatedIds = generated.map((s) => s.id);
+        if (generatedIds.length > 0) {
+          await prisma.shiftChangeRequest.deleteMany({ where: { assignment: { shiftId: { in: generatedIds } } } });
+          await prisma.shiftAssignment.deleteMany({ where: { shiftId: { in: generatedIds } } });
+          await prisma.swapRequest.deleteMany({
+            where: { OR: [{ shiftId: { in: generatedIds } }, { targetShiftId: { in: generatedIds } }] },
+          });
+          await prisma.shift.deleteMany({ where: { id: { in: generatedIds } } });
+        }
+      } else {
+        // Keep already-generated shifts as standalone shifts; just detach them from the template.
+        await prisma.shift.updateMany({ where: { templateId: id }, data: { templateId: null } });
+      }
+
+      await prisma.shiftTemplate.delete({ where: { id } });
+      await logAction(req.user.id, "SHIFT_TEMPLATE_DELETE", `Deleted shift template: ${existing.name} (removed generated shifts: ${deleteGeneratedShifts === "true"})`);
+      return res.json({ success: true });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/shift-templates/:id/generate", authenticate, requireAdmin, async (req: any, res) => {
+    const { id } = req.params;
+    const { rangeStart, rangeEnd, assignEmployee } = req.body;
+    if (!rangeStart || !rangeEnd) {
+      return res.status(400).json({ error: "Geef een start- en einddatum op voor de generatie." });
+    }
+
+    try {
+      const template = await prisma.shiftTemplate.findUnique({ where: { id } });
+      if (!template) return res.status(404).json({ error: "Sjabloon niet gevonden." });
+      if (!template.isActive) return res.status(400).json({ error: "Dit sjabloon is niet actief." });
+
+      const genStart = new Date(rangeStart);
+      const genEnd = new Date(rangeEnd);
+      const dayCount = Math.round((genEnd.getTime() - genStart.getTime()) / (1000 * 60 * 60 * 24));
+      if (dayCount < 0) {
+        return res.status(400).json({ error: "Einddatum moet na de startdatum liggen." });
+      }
+      if (dayCount > MAX_TEMPLATE_GENERATE_DAYS) {
+        return res.status(400).json({ error: `Periode mag maximaal ${MAX_TEMPLATE_GENERATE_DAYS} dagen zijn.` });
+      }
+
+      const templateStart = new Date(template.startDate);
+      const templateEnd = template.endDate ? new Date(template.endDate) : null;
+      const effectiveStart = genStart > templateStart ? genStart : templateStart;
+      const effectiveEnd = templateEnd && templateEnd < genEnd ? templateEnd : genEnd;
+
+      const activeDays = parseDaysOfWeek(template.daysOfWeek);
+      const shouldUseAlternateWeek = template.recurrencePattern === "BIWEEKLY";
+
+      // Existing shifts from this template in the window, to avoid re-creating duplicates on re-run.
+      const existingGenerated = await prisma.shift.findMany({
+        where: {
+          templateId: id,
+          date: { gte: rangeStart, lte: rangeEnd },
+        },
+        select: { date: true },
+      });
+      const existingDates = new Set(existingGenerated.map((s) => s.date));
+
+      let totalCreated = 0;
+      let skippedExisting = 0;
+      let skippedConflicts = 0;
+      const conflicts: { date: string }[] = [];
+
+      const cursor = new Date(effectiveStart);
+      let weekIndex = 0;
+      let lastWeekStart: Date | null = null;
+
+      while (cursor <= effectiveEnd) {
+        const dow = cursor.getDay();
+
+        // Track ISO-ish week boundaries (Monday start) to know odd/even week for BIWEEKLY.
+        const weekStart = new Date(cursor);
+        const mondayOffset = (weekStart.getDay() + 6) % 7;
+        weekStart.setDate(weekStart.getDate() - mondayOffset);
+        if (!lastWeekStart || weekStart.getTime() !== lastWeekStart.getTime()) {
+          if (lastWeekStart) weekIndex++;
+          lastWeekStart = weekStart;
+        }
+
+        const isEligibleWeek = !shouldUseAlternateWeek || weekIndex % 2 === 0;
+
+        if (activeDays.includes(dow) && isEligibleWeek) {
+          const dateStr = cursor.toISOString().split("T")[0];
+
+          if (existingDates.has(dateStr)) {
+            skippedExisting++;
+          } else {
+            let hasConflict = false;
+            if (assignEmployee && template.defaultEmployeeId) {
+              const conflict = await findBookingConflict(template.defaultEmployeeId, {
+                date: dateStr,
+                startTime: template.startTime,
+                endTime: template.endTime,
+              });
+              if (conflict) hasConflict = true;
+            }
+
+            if (hasConflict) {
+              skippedConflicts++;
+              conflicts.push({ date: dateStr });
+            } else {
+              const newShift = await prisma.shift.create({
+                data: {
+                  name: template.name,
+                  startTime: template.startTime,
+                  endTime: template.endTime,
+                  date: dateStr,
+                  color: template.color,
+                  requiredEmployees: template.requiredEmployees,
+                  notes: template.notes,
+                  templateId: template.id,
+                  isRecurring: true,
+                  recurrencePattern: template.recurrencePattern,
+                },
+              });
+              totalCreated++;
+
+              if (assignEmployee && template.defaultEmployeeId) {
+                await prisma.shiftAssignment.create({
+                  data: {
+                    shiftId: newShift.id,
+                    employeeId: template.defaultEmployeeId,
+                    status: "ASSIGNED",
+                  },
+                });
+              }
+            }
+          }
+        }
+
+        cursor.setDate(cursor.getDate() + 1);
+      }
+
+      await logAction(
+        req.user.id,
+        "SHIFT_TEMPLATE_GENERATE",
+        `Generated ${totalCreated} shift(en) from template "${template.name}" for ${rangeStart} to ${rangeEnd} (skipped existing: ${skippedExisting}, skipped conflicts: ${skippedConflicts})`
+      );
+      return res.json({ success: true, count: totalCreated, skippedExisting, skippedConflicts, conflicts });
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }
