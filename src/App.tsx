@@ -31,9 +31,6 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [adminOpenRequests, setAdminOpenRequests] = useState<number>(0);
   const [showFirstTimeGuide, setShowFirstTimeGuide] = useState(false);
-  const [hasCompletedGuide, setHasCompletedGuide] = useState(() => {
-    return localStorage.getItem("completedFirstTimeGuide") === "true";
-  });
 
   // Quick state synchronization
   const fetchCurrentUser = async (authToken: string) => {
@@ -62,18 +59,23 @@ export default function App() {
 
   // Check if we should show first-time guide
   useEffect(() => {
-    if (user && user.role === "ADMINISTRATOR" && !hasCompletedGuide) {
+    if (user && user.role === "ADMINISTRATOR" && !user.hasCompletedFirstTimeGuide) {
       // Show guide after a short delay to allow UI to settle
       const timer = setTimeout(() => {
         setShowFirstTimeGuide(true);
       }, 1000);
       return () => clearTimeout(timer);
     }
-  }, [user, hasCompletedGuide]);
+  }, [user]);
 
   const handleCompleteGuide = () => {
-    setHasCompletedGuide(true);
-    localStorage.setItem("completedFirstTimeGuide", "true");
+    setUser((prev: any) => (prev ? { ...prev, hasCompletedFirstTimeGuide: true } : prev));
+    if (token) {
+      fetch("/api/auth/complete-first-time-guide", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch((e) => console.error(e));
+    }
   };
 
   const handleOpenGuide = () => {

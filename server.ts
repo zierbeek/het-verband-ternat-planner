@@ -401,6 +401,7 @@ async function startServer() {
           role: user.role,
           name: user.name,
           employee: user.employee,
+          hasCompletedFirstTimeGuide: user.hasCompletedFirstTimeGuide,
         },
         requiresPasswordChange,
       });
@@ -632,7 +633,23 @@ async function startServer() {
         role: user.role,
         name: user.name,
         employee: user.employee,
+        hasCompletedFirstTimeGuide: user.hasCompletedFirstTimeGuide,
       });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Marks the first-time onboarding guide as seen for the current account.
+  // Stored on the User row (rather than localStorage) so it follows the
+  // account across browsers/devices and isn't reset by clearing site data.
+  app.post("/api/auth/complete-first-time-guide", authenticate, async (req: any, res) => {
+    try {
+      const user = await prisma.user.update({
+        where: { id: req.user.id },
+        data: { hasCompletedFirstTimeGuide: true },
+      });
+      return res.json({ success: true, hasCompletedFirstTimeGuide: user.hasCompletedFirstTimeGuide });
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }

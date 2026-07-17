@@ -967,7 +967,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
               </button>
               <button
                 onClick={nextDate}
-                className="p-1.5 hover:bg-slate-50 text-slate-600 transition cursor-pointer"
+                className="p-1.5 hover:bg-slate-50 border-l border-slate-200 text-slate-600 transition cursor-pointer"
               >
                 <ChevronRight className="h-4 w-4" />
               </button>
@@ -1018,14 +1018,17 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
               {/* Print Trigger */}
               <button
                 onClick={() => {
+                  const viewBeforePrint = viewType;
+                  if (viewType !== "month") setViewType("month");
                   setIsPrintMode(true);
                   setTimeout(() => {
                     window.print();
                     setIsPrintMode(false);
+                    if (viewBeforePrint !== "month") setViewType(viewBeforePrint);
                   }, 500);
                 }}
                 className="p-2 border border-slate-200 hover:bg-slate-50 rounded-lg sm:rounded-xl text-slate-600 transition cursor-pointer"
-                title="Afdrukken"
+                title="Afdrukken (maandkalender)"
               >
                 <Printer className="h-4 w-4" />
               </button>
