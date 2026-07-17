@@ -1180,7 +1180,8 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                             className={`px-1.5 py-0.5 border-l-2 rounded-r text-[10px] font-semibold text-slate-800 cursor-pointer hover:opacity-85 transition truncate ${
                               isBulkMode && selectedShiftIds.includes(shift.id) ? "ring-2 ring-blue-400" : ""
                             }`}
-                            title={`${shift.name} (${shift.startTime}-${shift.endTime})`}
+                            // Ook in tooltip medewerker naam:
+                            title={`${shift.name} (${shift.startTime}-${shift.endTime}) - ${shift.assignments?.[0]?.employee?.user?.name || "Onbezet"}`}
                           >
                             {isBulkMode && (selectedShiftIds.includes(shift.id) ? "☑ " : "☐ ")}
                             {shift.startTime} {shift.name}

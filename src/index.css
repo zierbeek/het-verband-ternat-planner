@@ -62,7 +62,15 @@ body {
   .no-print {
     display: none !important;
   }
+@page {
+  size: A4 landscape;  /* Landscape voor beter fit */
+  margin: 10mm;
+}
 
+html, body {
+  margin: 0 !important;
+  padding: 0 !important;
+}
   /* Clean white background */
   body {
     background-color: white !important;
@@ -105,14 +113,35 @@ body {
     border: 1px solid #333;
   }
 
-  /* Shift elements */
-  .shift-badge,
-  .shift-block {
-    background-color: white !important;
-    color: black !important;
+    /* Calendar header */
+  .grid.grid-cols-7.bg-slate-50\/70 > div {
+    font-size: 9px !important;
+    padding: 4px 2px !important;
     border: 1px solid #333 !important;
-    page-break-inside: avoid;
+}
+
+  /* Calendar cells */
+  .grid.grid-cols-7:not(.bg-slate-50\/70) > div {
+    min-height: 60px !important;    /* Minder hoogte */
+    padding: 3px !important;        /* Minder padding */
+    font-size: 8px !important;      /* Kleiner font */
   }
+
+  /* Shift badges */
+  .grid.grid-cols-7:not(.bg-slate-50\/70) > div > div > div {
+    font-size: 7px !important;      /* Zeer klein voor print */
+    padding: 2px 1px !important;
+    line-height: 1.2 !important;
+  }
+
+    /* Shift elements */
+    .shift-badge,
+    .shift-block {
+      background-color: white !important;
+      color: black !important;
+      border: 1px solid #333 !important;
+      page-break-inside: avoid;
+    }
 
   /* Ensure all text is black */
   h1, h2, h3, h4, h5, h6, p, span, div {
