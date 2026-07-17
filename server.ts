@@ -612,6 +612,13 @@ async function startServer() {
       // pollable subscription feed instead of a one-off file download when the
       // link is opened directly (this matters for the "Direct Abonneren" flow).
       res.setHeader("Content-Disposition", `inline; filename="planning-${userId}.ics"`);
+      // Explicitly forbid caching of this response by any intermediary (CDN,
+      // reverse proxy, browser). Without this, a proxy sitting in front of the
+      // app can legally cache and keep re-serving an old/empty version of the
+      // feed to calendar clients even after new shifts are assigned, which
+      // looks exactly like "nothing syncs".
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+      res.setHeader("Pragma", "no-cache");
       return res.send(ics);
     } catch (err) {
       return res.status(500).send("Fout bij genereren van iCal feed: " + err.message);
