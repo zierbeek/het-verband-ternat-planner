@@ -106,42 +106,72 @@ html, body {
   .calendar-grid {
     width: 100%;
     page-break-inside: avoid;
+    table-layout: fixed;
   }
 
   .calendar-cell {
     page-break-inside: avoid;
-    border: 1px solid #333;
-  }
-
-    /* Calendar header */
-  .grid.grid-cols-7.bg-slate-50\/70 > div {
-    font-size: 9px !important;
-    padding: 4px 2px !important;
     border: 1px solid #333 !important;
-}
-
-  /* Calendar cells */
-  .grid.grid-cols-7:not(.bg-slate-50\/70) > div {
-    min-height: 60px !important;    /* Minder hoogte */
-    padding: 3px !important;        /* Minder padding */
-    font-size: 8px !important;      /* Kleiner font */
+    min-height: 85px !important;
+    padding: 4px !important;
+    vertical-align: top;
+    overflow: visible !important;
   }
 
-  /* Shift badges */
-  .grid.grid-cols-7:not(.bg-slate-50\/70) > div > div > div {
-    font-size: 7px !important;      /* Zeer klein voor print */
-    padding: 2px 1px !important;
-    line-height: 1.2 !important;
+  .print-outside-month {
+    background: #f4f4f4 !important;
   }
 
-    /* Shift elements */
-    .shift-badge,
-    .shift-block {
-      background-color: white !important;
-      color: black !important;
-      border: 1px solid #333 !important;
-      page-break-inside: avoid;
-    }
+  /* Calendar header (Ma/Di/Wo/...) */
+  .calendar-header-row > div {
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    padding: 5px 2px !important;
+    border: 1px solid #333 !important;
+    letter-spacing: 0.04em;
+  }
+
+  /* Date number in each cell */
+  .calendar-cell-date {
+    font-size: 10px !important;
+    display: block;
+    margin-bottom: 3px;
+  }
+
+  /* Shift list container: let it grow instead of scrolling/clipping */
+  .print-shift-list {
+    max-height: none !important;
+    overflow: visible !important;
+    gap: 3px !important;
+  }
+
+  /* Shift badges in print: name on top, employee(s) below, no times */
+  .shift-badge {
+    background-color: white !important;
+    color: black !important;
+    border: 1px solid #333 !important;
+    border-left-width: 3px !important;
+    page-break-inside: avoid;
+    white-space: normal !important;
+    overflow: visible !important;
+    padding: 2px 4px !important;
+    border-radius: 2px;
+  }
+
+  .print-shift-name {
+    font-size: 8.5px !important;
+    font-weight: 700 !important;
+    line-height: 1.25 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+
+  .print-shift-employees {
+    font-size: 8.5px !important;
+    font-weight: 500 !important;
+    line-height: 1.25 !important;
+    margin-top: 1px;
+  }
 
   /* Ensure all text is black */
   h1, h2, h3, h4, h5, h6, p, span, div {

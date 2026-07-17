@@ -1145,12 +1145,12 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
         {viewType === "month" && (
           <div className="overflow-x-auto touch-pan-x">
             <div className="min-w-[700px] sm:min-w-0">
-              <div className="grid grid-cols-7 bg-slate-50/70 border-b border-slate-200 py-3 text-center text-xs sm:text-sm font-bold text-slate-500 uppercase tracking-wider">
+              <div className="grid grid-cols-7 bg-slate-50/70 border-b border-slate-200 py-3 text-center text-xs sm:text-sm font-bold text-slate-500 uppercase tracking-wider calendar-header-row">
                 {["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"].map((day) => (
                   <div key={day}>{day}</div>
                 ))}
               </div>
-              <div className="grid grid-cols-7 border-slate-200">
+              <div className="grid grid-cols-7 border-slate-200 calendar-grid">
                 {monthDates.map((date, idx) => {
                   const dayShifts = getShiftsForDate(date);
                   const isCurrentMonth = date.getMonth() === currentDate.getMonth();
@@ -1158,14 +1158,14 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                   return (
                     <div
                       key={idx}
-                      className={`min-h-[110px] p-2 border-r border-b border-slate-200 flex flex-col gap-1 transition ${
+                      className={`min-h-[110px] p-2 border-r border-b border-slate-200 flex flex-col gap-1 transition calendar-cell ${
                         isCurrentMonth ? "bg-white" : "bg-slate-50/40 text-slate-400"
-                      }`}
+                      } ${isPrintMode && !isCurrentMonth ? "print-outside-month" : ""}`}
                     >
-                      <span className="text-xs sm:text-sm font-bold text-slate-700">
+                      <span className="text-xs sm:text-sm font-bold text-slate-700 calendar-cell-date">
                         {date.getDate()}
                       </span>
-                      <div className="space-y-1 overflow-y-auto max-h-[85px]">
+                      <div className={`space-y-1 overflow-y-auto max-h-[85px] ${isPrintMode ? "print-shift-list" : ""}`}>
                         {dayShifts.map((shift) => (
                           <div
                             key={shift.id}
@@ -1177,14 +1177,35 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                               }
                             }}
                             style={{ backgroundColor: shift.color + "22", borderLeftColor: shift.color }}
-                            className={`px-1.5 py-0.5 border-l-2 rounded-r text-[10px] font-semibold text-slate-800 cursor-pointer hover:opacity-85 transition truncate ${
+                            className={`px-1.5 py-0.5 border-l-2 rounded-r text-[10px] font-semibold text-slate-800 cursor-pointer hover:opacity-85 transition truncate shift-badge ${
                               isBulkMode && selectedShiftIds.includes(shift.id) ? "ring-2 ring-blue-400" : ""
-                            }`}
+                            } ${isPrintMode ? "whitespace-normal truncate-none" : ""}`}
                             // Ook in tooltip medewerker naam:
-                            title={`${shift.name} (${shift.startTime}-${shift.endTime}) - ${shift.assignments?.[0]?.employee?.user?.name || "Onbezet"}`}
+                            title={`${shift.name} (${shift.startTime}-${shift.endTime}) - ${
+                              shift.assignments?.map((a) => a.employee?.user?.name).filter(Boolean).join(", ") || "Onbezet"
+                            }`}
                           >
-                            {isBulkMode && (selectedShiftIds.includes(shift.id) ? "☑ " : "☐ ")}
-                            {shift.startTime} {shift.name}
+                            {isPrintMode ? (
+                              <>
+                                <div className="print-shift-name">
+                                  {isBulkMode && (selectedShiftIds.includes(shift.id) ? "☑ " : "☐ ")}
+                                  {shift.name}
+                                </div>
+                                <div className="print-shift-employees">
+                                  {shift.assignments && shift.assignments.length > 0
+                                    ? shift.assignments
+                                        .map((a) => a.employee?.user?.name)
+                                        .filter(Boolean)
+                                        .join(", ")
+                                    : "Onbezet"}
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                {isBulkMode && (selectedShiftIds.includes(shift.id) ? "☑ " : "☐ ")}
+                                {shift.startTime} {shift.name}
+                              </>
+                            )}
                           </div>
                         ))}
                         {getLeavesForDate(date).map((leave) => (
