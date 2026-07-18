@@ -19,7 +19,7 @@ import {
   Repeat,
   CalendarClock,
 } from "lucide-react";
-import { Shift, Employee, ShiftPreset, ShiftTemplate } from "../types.js";
+import { Shift, Employee, ShiftPreset, ShiftTemplate, Availability } from "../types.js";
 import { getUserColorStyle } from "../utils/userColor.ts";
 
 interface ShiftCalendarProps {
@@ -145,6 +145,11 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
 
   // Leave requests state
   const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
+
+  // Employee-submitted availability, used to warn the administrator when
+  // assigning someone who indicated they're not available (recurring weekday
+  // preference or a specific-date exception).
+  const [availabilities, setAvailabilities] = useState<Availability[]>([]);
 
   // Deletion confirmation inline state
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
@@ -487,12 +492,28 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
     }
   };
 
+  const fetchAvailabilities = async () => {
+    if (user.role !== "ADMINISTRATOR") return;
+    try {
+      const res = await fetch("/api/availabilities", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAvailabilities(data);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   useEffect(() => {
     fetchShifts();
     fetchEmployees();
     fetchPresets();
     fetchTemplates();
     fetchLeaveRequests();
+    fetchAvailabilities();
   }, [currentDate, selectedEmployeeFilter, token]);
 
   // The first two presets (by `order`) drive the two quick-planning columns
@@ -928,6 +949,35 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
       if (leave.status === "CANCELLED") return false;
       return dateStr >= leave.startDate && dateStr <= leave.endDate;
     });
+  };
+
+  // Determines whether an employee indicated they're available on the given
+  // date, based on what they submitted in "Mijn Beschikbaarheid". A specific
+  // date entry always takes precedence over the recurring weekday setting.
+  // Employees who haven't configured anything are treated as available
+  // (opt-out model), so this only ever warns - it never blocks assignment.
+  const getEmployeeAvailabilityForDate = (employeeId: string, dateStr: string): Availability | null => {
+    const specific = availabilities.find(
+      (a) => a.employeeId === employeeId && a.isSpecificDate && a.date === dateStr
+    );
+    if (specific) return specific;
+
+    const [y, m, d] = dateStr.split("-").map(Number);
+    const dayOfWeek = new Date(y, (m || 1) - 1, d || 1).getDay();
+    const recurring = availabilities.find(
+      (a) => a.employeeId === employeeId && !a.isSpecificDate && a.dayOfWeek === dayOfWeek
+    );
+    return recurring || null;
+  };
+
+  const isEmployeeUnavailable = (employeeId: string, dateStr: string) => {
+    const match = getEmployeeAvailabilityForDate(employeeId, dateStr);
+    return match ? !match.isAvailable : false;
+  };
+
+  const getEmployeeOptionLabel = (emp: Employee, dateStr: string) => {
+    const name = emp.user?.name || "";
+    return isEmployeeUnavailable(emp.id, dateStr) ? `${name} (niet beschikbaar)` : name;
   };
 
   return (
@@ -1646,10 +1696,15 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                   <option value="">-- Nog niet toewijzen --</option>
                   {employees.map((emp) => (
                     <option key={emp.id} value={emp.id}>
-                      {emp.user?.name}
+                      {getEmployeeOptionLabel(emp, shiftDate)}
                     </option>
                   ))}
                 </select>
+                {assignEmployeeId && shiftDate && isEmployeeUnavailable(assignEmployeeId, shiftDate) && (
+                  <p className="mt-1 text-[11px] font-semibold text-amber-600">
+                    Let op: deze medewerker heeft aangegeven niet beschikbaar te zijn op deze datum.
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-2.5 sm:p-3">
@@ -1728,10 +1783,15 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                   <option value="">-- Shift onbezet laten --</option>
                   {employees.map((emp) => (
                     <option key={emp.id} value={emp.id}>
-                      {emp.user?.name}
+                      {getEmployeeOptionLabel(emp, selectedShift.date)}
                     </option>
                   ))}
                 </select>
+                {editEmployeeId && isEmployeeUnavailable(editEmployeeId, selectedShift.date) && (
+                  <p className="text-[11px] font-semibold text-amber-600">
+                    Let op: deze medewerker heeft aangegeven niet beschikbaar te zijn op deze datum.
+                  </p>
+                )}
                 <button
                   type="button"
                   onClick={handleSaveAssignment}
@@ -1973,6 +2033,16 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                     </option>
                   ))}
                 </select>
+                {bulkAssignEmployeeId && (() => {
+                  const unavailableCount = shifts.filter(
+                    (s) => selectedShiftIds.includes(s.id) && isEmployeeUnavailable(bulkAssignEmployeeId, s.date)
+                  ).length;
+                  return unavailableCount > 0 ? (
+                    <p className="mt-1 text-[11px] font-semibold text-amber-600">
+                      Let op: deze medewerker heeft aangegeven niet beschikbaar te zijn op {unavailableCount} van de geselecteerde shift(en).
+                    </p>
+                  ) : null;
+                })()}
               </div>
             )}
 

@@ -2615,6 +2615,21 @@ async function startServer() {
         return res.status(400).json({ error: "An active swap request already exists for this colleague and shift" });
       }
 
+      // The colleague being asked to take over `requesterShift` must not
+      // already be working at that moment. Their own shift being offered
+      // back (targetShiftId, if any) is excluded since it's the one being
+      // vacated as part of this very swap.
+      const targetConflict = await findBookingConflict(
+        targetId,
+        requesterShift,
+        targetShiftId ? [targetShiftId] : []
+      );
+      if (targetConflict) {
+        return res.status(409).json({
+          error: `Kan geen ruil voorstellen: ${targetEmployee.user.name} is ${describeConflict(targetConflict)}.`,
+        });
+      }
+
       const swap = await prisma.swapRequest.create({
         data: {
           shiftId,
@@ -2693,6 +2708,22 @@ async function startServer() {
 
       if (swap.target.userId !== req.user.id) {
         return res.status(403).json({ error: "Forbidden: You are not the target of this swap" });
+      }
+
+      // Re-check for a scheduling conflict at accept time: the colleague may
+      // have been assigned a new shift after the swap was proposed, so the
+      // check at proposal time is not sufficient on its own.
+      if (response === "ACCEPT") {
+        const conflict = await findBookingConflict(
+          swap.targetId,
+          swap.shift,
+          swap.targetShiftId ? [swap.targetShiftId] : []
+        );
+        if (conflict) {
+          return res.status(409).json({
+            error: `U kunt deze ruil niet accepteren: u bent ${describeConflict(conflict)}.`,
+          });
+        }
       }
 
       const nextStatus = response === "ACCEPT" ? "ACCEPTED_TARGET" : "REJECTED_TARGET";
@@ -3129,6 +3160,18 @@ async function startServer() {
   // ----------------------------------------------------
   // AVAILABILITY ENDPOINTS
   // ----------------------------------------------------
+
+  // Administrators only: fetch every employee's submitted availability in one
+  // call, so the shift planner can warn when assigning someone who indicated
+  // they're not available at that time.
+  app.get("/api/availabilities", authenticate, requireAdmin, async (req, res) => {
+    try {
+      const list = await prisma.availability.findMany();
+      return res.json(list);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
 
   app.get("/api/availabilities/:employeeId", authenticate, async (req, res) => {
     const { employeeId } = req.params;
