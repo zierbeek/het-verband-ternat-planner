@@ -10,6 +10,7 @@ import {
   HelpCircle,
   ChevronsLeft,
   ChevronsRight,
+  Clock,
 } from "lucide-react";
 import Login from "./components/Login.tsx";
 import Dashboard from "./components/Dashboard.tsx";
@@ -17,6 +18,7 @@ import ShiftCalendar from "./components/ShiftCalendar.tsx";
 import LeaveManagement from "./components/LeaveManagement.tsx";
 import SwapWorkflows from "./components/SwapWorkflows.tsx";
 import AdminPanel from "./components/AdminPanel.tsx";
+import AvailabilitySettings from "./components/AvailabilitySettings.tsx";
 import FirstTimeGuide from "./components/FirstTimeGuide.tsx";
 import PasswordChangeModal from "./components/PasswordChangeModal.tsx";
 import { getUserColorStyle } from "./utils/userColor.ts";
@@ -154,6 +156,9 @@ export default function App() {
     { id: "calendar", label: "Dienstregeling", shortLabel: "Planning", icon: Calendar },
     { id: "leave", label: "Verlofaanvragen", shortLabel: "Verlof", icon: ClipboardList },
     { id: "swaps", label: "Ruilbord", shortLabel: "Ruilbord", icon: ArrowLeftRight },
+    ...(user.role === "EMPLOYEE" && user.employee
+      ? [{ id: "availability", label: "Mijn Beschikbaarheid", shortLabel: "Beschikbaar", icon: Clock }]
+      : []),
   ];
   const adminMenuItems =
     user.role === "ADMINISTRATOR"
@@ -307,6 +312,7 @@ export default function App() {
           {activeTab === "calendar" && <ShiftCalendar user={user} token={token} />}
           {activeTab === "leave" && <LeaveManagement user={user} token={token} />}
           {activeTab === "swaps" && <SwapWorkflows user={user} token={token} />}
+          {activeTab === "availability" && <AvailabilitySettings user={user} token={token} />}
           {activeTab === "admin" && <AdminPanel user={user} token={token} />}
         </main>
 
