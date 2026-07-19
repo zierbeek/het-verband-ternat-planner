@@ -1,12 +1,17 @@
+// Palet voor medewerker-identificatie op het rooster: elke persoon krijgt een
+// consistente kleur op basis van hun ID. Afgestemd op de stijlgids van Het
+// Verband Ternat (warme, gedempte tinten rond het logo-groen/koraal/sage in
+// plaats van felle, generieke webkleuren), terwijl de tinten onderling nog
+// voldoende verschillen om personen op het rooster te kunnen onderscheiden.
 const USER_COLOR_PALETTE = [
-  "#2563eb",
-  "#0f766e",
-  "#7c3aed",
-  "#be185d",
-  "#ea580c",
-  "#059669",
-  "#dc2626",
-  "#1d4ed8",
+  "#4F8963", // logo-groen
+  "#C85F44", // koraal donker
+  "#7CA789", // sage
+  "#B8894F", // warm okergoud
+  "#5F8AA6", // gedempt blauwgrijs
+  "#8C6E9C", // gedempt aubergine
+  "#3A5F45", // donker leigroen
+  "#A65B7A", // gedempte bes
 ];
 
 const hexToRgb = (hex: string) => {

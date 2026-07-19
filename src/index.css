@@ -1,15 +1,124 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@500;600&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
+/* ==========================================================================
+   STIJLGIDS - HET VERBAND TERNAT
+
+   Dit blok herdefinieert de kleur, vorm en typografie tokens die de hele
+   app al gebruikt (klassen zoals bg blue 600, text slate 500, rounded xl).
+   Tailwind v4 laat elke utility klasse terugvallen op de bijhorende theme
+   variabele; door die variabelen hier eenmalig te herdefinieren, valt elk
+   scherm automatisch terug op de merkstijl, zonder dat elke component
+   afzonderlijk aangepast hoeft te worden.
+
+   Kleurmapping, semantisch en niet enkel 1 op 1 hernoemd:
+   - blue      wordt logo groen      -> primaire acties, merk, links
+   - slate     wordt warme room/tekst schaal -> algemene UI en tekst
+   - emerald en green blijven succes / goedgekeurd, in een frissere tint
+   - amber     wordt een warme koraaltint   -> waarschuwing, "let op"
+   - rose/red  worden koraal                -> fout, weigering, verwijderen
+   - purple    wordt sage                   -> secundair, subtiel accent
+   ========================================================================== */
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: "Poppins", "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* --- Primair: logo-groen (vervangt Tailwind 'blue') --- */
+  --color-blue-50: #EEF4F0;
+  --color-blue-100: #DCEAE0;
+  --color-blue-200: #C3DDCA;
+  --color-blue-400: #6FA382;
+  --color-blue-500: #5A9670;
+  --color-blue-600: #4F8963;
+  --color-blue-700: #427555;
+  --color-blue-800: #3A5F45;
+  --color-blue-900: #2E4A37;
+
+  /* --- Neutraal: warme room/tekst-schaal (vervangt Tailwind 'slate') --- */
+  --color-slate-50: #FAF7F0;
+  --color-slate-100: #F3EEE3;
+  --color-slate-200: #EFE9DE;
+  --color-slate-300: #E1D9C9;
+  --color-slate-400: #B9B2A2;
+  --color-slate-500: #6B6A63;
+  --color-slate-600: #57564F;
+  --color-slate-700: #43423C;
+  --color-slate-800: #2E2E2A;
+  --color-slate-900: #232320;
+
+  /* --- Succes: fris groen, onderscheidbaar van primair (vervangt 'emerald') --- */
+  --color-emerald-50: #EEF6EF;
+  --color-emerald-100: #DCEDDF;
+  --color-emerald-200: #BEE0C4;
+  --color-emerald-600: #4F8963;
+  --color-emerald-700: #3A5F45;
+
+  /* --- Succes-alias 'green' (dashboard/status-teksten) --- */
+  --color-green-50: #EEF6EF;
+  --color-green-200: #BEE0C4;
+  --color-green-500: #5A9670;
+  --color-green-700: #3A5F45;
+  --color-green-800: #2E4A37;
+
+  /* --- Waarschuwing: warme koraaltint (vervangt 'amber') --- */
+  --color-amber-50: #FBF0EC;
+  --color-amber-100: #F7E1D8;
+  --color-amber-200: #F0C9B9;
+  --color-amber-400: #EC9679;
+  --color-amber-500: #E8785A;
+  --color-amber-600: #D66B4E;
+  --color-amber-700: #C85F44;
+  --color-amber-800: #A94D37;
+  --color-amber-900: #833B2A;
+
+  /* --- Fout / verwijderen / weigeren: koraal (vervangt 'rose' en 'red') --- */
+  --color-rose-50: #FBF0EC;
+  --color-rose-100: #F7E1D8;
+  --color-rose-200: #F0C9B9;
+  --color-rose-500: #E8785A;
+  --color-rose-600: #DA6C4F;
+  --color-rose-700: #C85F44;
+
+  --color-red-50: #FBF0EC;
+  --color-red-100: #F7E1D8;
+  --color-red-200: #F0C9B9;
+  --color-red-400: #EC9679;
+  --color-red-500: #E8785A;
+  --color-red-600: #DA6C4F;
+  --color-red-700: #C85F44;
+  --color-red-800: #A94D37;
+  --color-red-900: #833B2A;
+
+  /* --- Secundair/subtiel accent: sage (vervangt 'purple') --- */
+  --color-purple-50: #EEF3EF;
+  --color-purple-100: #DDE9DF;
+  --color-purple-500: #7CA789;
+  --color-purple-600: #6B9878;
+  --color-purple-700: #587F65;
+
+  /* --- Vormtaal: rondere hoeken overal, conform de stijlgids --- */
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-3xl: 30px;
+}
+
+/* Koppen volgen de stijlgids-typografie (Poppins, 500-600) zonder dat elke
+   losse <h1>/<h2>/<h3> in de app een class hoeft te krijgen. */
+h1, h2, h3 {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 body {
   font-family: var(--font-sans);
-  background-color: #f8fafc;
-  color: #0f172a;
+  background-color: #FAF7F0;
+  color: #2E2E2A;
   -webkit-tap-highlight-color: transparent;
   /* Prevent scrolling rebound issues in Safari mobile */
   overscroll-behavior-y: contain;

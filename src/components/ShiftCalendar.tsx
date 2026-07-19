@@ -38,8 +38,8 @@ type PlannerDragItem =
 // two quick-planning columns; administrators can rename/retime/recolor them
 // (and add further presets) via the "Presets beheren" panel.
 const FALLBACK_SLOT_PRESETS: Record<PlannerSlot, ShiftPreset> = {
-  morning: { id: "fallback-morning", label: "Voormiddag", startTime: "07:00", endTime: "15:00", color: "#10b981", order: 0 },
-  afternoon: { id: "fallback-afternoon", label: "Namiddag", startTime: "15:00", endTime: "23:00", color: "#f59e0b", order: 1 },
+  morning: { id: "fallback-morning", label: "Voormiddag", startTime: "07:00", endTime: "15:00", color: "#4F8963", order: 0 },
+  afternoon: { id: "fallback-afternoon", label: "Namiddag", startTime: "15:00", endTime: "23:00", color: "#E8785A", order: 1 },
 };
 
 const parseTimeToMinutes = (time: string) => {
@@ -83,7 +83,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
   const [newPresetLabel, setNewPresetLabel] = useState("");
   const [newPresetStart, setNewPresetStart] = useState("06:00");
   const [newPresetEnd, setNewPresetEnd] = useState("14:00");
-  const [newPresetColor, setNewPresetColor] = useState("#6366f1");
+  const [newPresetColor, setNewPresetColor] = useState("#7CA789");
   const [newPresetDefaultEmployeeId, setNewPresetDefaultEmployeeId] = useState("");
   const [editingPresetId, setEditingPresetId] = useState<string | null>(null);
   const [editPresetDraft, setEditPresetDraft] = useState<{ label: string; startTime: string; endTime: string; color: string; defaultEmployeeId: string } | null>(null);
@@ -95,7 +95,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
   const [templateName, setTemplateName] = useState("");
   const [templateStart, setTemplateStart] = useState("07:00");
   const [templateEnd, setTemplateEnd] = useState("15:00");
-  const [templateColor, setTemplateColor] = useState("#8b5cf6");
+  const [templateColor, setTemplateColor] = useState("#7CA789");
   const [templateRequiredEmployees, setTemplateRequiredEmployees] = useState(1);
   const [templateNotes, setTemplateNotes] = useState("");
   const [templateDaysOfWeek, setTemplateDaysOfWeek] = useState<number[]>([]);
@@ -118,7 +118,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
   const [startTime, setStartTime] = useState("07:00");
   const [endTime, setEndTime] = useState("15:00");
   const [shiftDate, setShiftDate] = useState("");
-  const [shiftColor, setShiftColor] = useState("#10b981");
+  const [shiftColor, setShiftColor] = useState("#4F8963");
   const [requiredEmployees, setRequiredEmployees] = useState(1);
   const [notes, setNotes] = useState("");
   const [assignEmployeeId, setAssignEmployeeId] = useState("");
@@ -168,7 +168,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
     setTemplateName("");
     setTemplateStart("07:00");
     setTemplateEnd("15:00");
-    setTemplateColor("#8b5cf6");
+    setTemplateColor("#7CA789");
     setTemplateRequiredEmployees(1);
     setTemplateNotes("");
     setTemplateDaysOfWeek([]);
@@ -547,7 +547,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
         setNewPresetLabel("");
         setNewPresetStart("06:00");
         setNewPresetEnd("14:00");
-        setNewPresetColor("#6366f1");
+        setNewPresetColor("#7CA789");
         setNewPresetDefaultEmployeeId("");
         fetchPresets();
         showFeedback("Preset toegevoegd!");
@@ -1262,7 +1262,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                           <div
                             key={`leave-${leave.id}`}
                             style={{
-                              borderLeftColor: leave.status === "APPROVED" ? "#f43f5e" : "#f59e0b",
+                              borderLeftColor: leave.status === "APPROVED" ? "#C85F44" : "#E8785A",
                               ...getEmployeeBadgeStyle(leave.employeeId),
                             }}
                             className={`px-1.5 py-0.5 border-l-2 rounded-r text-[10px] font-semibold truncate ${
