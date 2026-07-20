@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Clock, Calendar, CheckSquare, Megaphone, Bell, BellOff, User, ClipboardList, TrendingUp, Trash2, Archive } from "lucide-react";
 import { Shift, Announcement, Notification } from "../types.js";
 import { getUserColorStyle } from "../utils/userColor.ts";
+import { toDateStr } from "../utils/date.ts";
 
 interface DashboardProps {
   user: any;
@@ -25,10 +26,10 @@ export default function Dashboard({ user, token }: DashboardProps) {
       const headers = { Authorization: `Bearer ${token}` };
 
       // Get shifts for next 7 days
-      const start = new Date().toISOString().split("T")[0];
+      const start = toDateStr(new Date());
       const end = new Date();
       end.setDate(end.getDate() + 7);
-      const endStr = end.toISOString().split("T")[0];
+      const endStr = toDateStr(end);
 
       const url = user.role === "EMPLOYEE" 
         ? `/api/shifts?startDate=${start}&endDate=${endStr}&employeeId=${user.employee?.id}`
@@ -159,7 +160,7 @@ export default function Dashboard({ user, token }: DashboardProps) {
     }
   };
 
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = toDateStr(new Date());
   const todayShifts = shifts.filter((s) => s.date === todayStr);
   const upcomingShifts = shifts.filter((s) => s.date > todayStr);
 

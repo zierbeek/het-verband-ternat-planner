@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { Shift, Employee, ShiftPreset, ShiftTemplate, Availability } from "../types.js";
 import { getUserColorStyle } from "../utils/userColor.ts";
+import { toDateStr } from "../utils/date.ts";
 
 interface ShiftCalendarProps {
   user: any;
@@ -100,7 +101,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
   const [templateNotes, setTemplateNotes] = useState("");
   const [templateDaysOfWeek, setTemplateDaysOfWeek] = useState<number[]>([]);
   const [templateRecurrence, setTemplateRecurrence] = useState<"WEEKLY" | "BIWEEKLY">("WEEKLY");
-  const [templateStartDate, setTemplateStartDate] = useState(new Date().toISOString().split("T")[0]);
+  const [templateStartDate, setTemplateStartDate] = useState(toDateStr(new Date()));
   const [templateEndDate, setTemplateEndDate] = useState("");
   const [templateDefaultEmployeeId, setTemplateDefaultEmployeeId] = useState("");
   const [isTemplateSubmitting, setIsTemplateSubmitting] = useState(false);
@@ -108,7 +109,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
 
   // Generate-from-template panel state
   const [generatingTemplateId, setGeneratingTemplateId] = useState<string | null>(null);
-  const [generateRangeStart, setGenerateRangeStart] = useState(new Date().toISOString().split("T")[0]);
+  const [generateRangeStart, setGenerateRangeStart] = useState(toDateStr(new Date()));
   const [generateRangeEnd, setGenerateRangeEnd] = useState("");
   const [generateAssignEmployee, setGenerateAssignEmployee] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -173,7 +174,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
     setTemplateNotes("");
     setTemplateDaysOfWeek([]);
     setTemplateRecurrence("WEEKLY");
-    setTemplateStartDate(new Date().toISOString().split("T")[0]);
+    setTemplateStartDate(toDateStr(new Date()));
     setTemplateEndDate("");
     setTemplateDefaultEmployeeId("");
     setEditingTemplateId(null);
@@ -422,8 +423,8 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
       const end = new Date(currentDate);
       end.setDate(end.getDate() + 31);
 
-      const startStr = start.toISOString().split("T")[0];
-      const endStr = end.toISOString().split("T")[0];
+      const startStr = toDateStr(start);
+      const endStr = toDateStr(end);
 
       let url = `/api/shifts?startDate=${startStr}&endDate=${endStr}`;
       if (selectedEmployeeFilter !== "all") {
@@ -828,7 +829,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
   const monthDates = getMonthDates(currentDate);
 
   const getShiftsForDate = (date: Date) => {
-    const dateStr = date.toISOString().split("T")[0];
+    const dateStr = toDateStr(date);
     return shifts.filter((s) => s.date === dateStr);
   };
 
@@ -846,7 +847,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
     const isCopyDrag =
       draggedItem.type === "shift" && (isCopyModifierPressed.current || event.ctrlKey || event.metaKey);
 
-    const dateStr = date.toISOString().split("T")[0];
+    const dateStr = toDateStr(date);
 
     try {
       if (draggedItem.type === "template") {
@@ -944,7 +945,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
   };
 
   const getLeavesForDate = (date: Date) => {
-    const dateStr = date.toISOString().split("T")[0];
+    const dateStr = toDateStr(date);
     return leaveRequests.filter((leave) => {
       if (leave.status === "CANCELLED") return false;
       return dateStr >= leave.startDate && dateStr <= leave.endDate;
@@ -1124,7 +1125,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                   </button>
                   <button
                     onClick={() => {
-                      setShiftDate(currentDate.toISOString().split("T")[0]);
+                      setShiftDate(toDateStr(currentDate));
                       setIsCreateModalOpen(true);
                     }}
                     className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold text-white transition shadow-xs cursor-pointer whitespace-nowrap"
@@ -1343,7 +1344,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                   {weekDates.map((date, idx) => {
                     const morningShifts = getShiftsForDateAndSlot(date, "morning");
                     const afternoonShifts = getShiftsForDateAndSlot(date, "afternoon");
-                    const dayKey = date.toISOString().split("T")[0];
+                    const dayKey = toDateStr(date);
                     return (
                       <div key={idx} className="p-2 bg-white space-y-2 flex flex-col">
                         {[
@@ -1482,7 +1483,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 sm:p-3 mb-5">
                 {(Object.keys(slotPresets) as PlannerSlot[]).map((slot) => {
                   const config = slotPresets[slot];
-                  const slotKey = `${currentDate.toISOString().split("T")[0]}-${slot}`;
+                  const slotKey = `${toDateStr(currentDate)}-${slot}`;
                   const slotShifts = getShiftsForDateAndSlot(currentDate, slot);
 
                   return (
@@ -2393,7 +2394,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                               type="button"
                               onClick={() => {
                                 setGeneratingTemplateId(tmpl.id);
-                                setGenerateRangeStart(new Date().toISOString().split("T")[0]);
+                                setGenerateRangeStart(toDateStr(new Date()));
                                 setGenerateRangeEnd("");
                               }}
                               title="Genereren"
