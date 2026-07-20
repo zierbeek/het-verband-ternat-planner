@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { User, LogIn, ShieldAlert, UserCheck } from "lucide-react";
+import ThemeToggle from "./ThemeToggle.tsx";
 
 interface LoginProps {
   onLoginSuccess: (token: string, user: any) => void;
@@ -70,7 +71,11 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 relative">
+      <div className="absolute top-4 right-4 sm:top-6 sm:right-6">
+        <ThemeToggle />
+      </div>
+
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
           <div className="h-12 w-12 rounded-xl bg-blue-600 overflow-hidden shadow-md">

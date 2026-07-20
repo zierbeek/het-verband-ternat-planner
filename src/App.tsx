@@ -21,6 +21,7 @@ import AdminPanel from "./components/AdminPanel.tsx";
 import AvailabilitySettings from "./components/AvailabilitySettings.tsx";
 import FirstTimeGuide from "./components/FirstTimeGuide.tsx";
 import PasswordChangeModal from "./components/PasswordChangeModal.tsx";
+import ThemeToggle from "./components/ThemeToggle.tsx";
 import { getUserColorStyle } from "./utils/userColor.ts";
 
 export default function App() {
@@ -197,6 +198,8 @@ export default function App() {
                 het ruilbord, de verlofoverzichten en het beheercentrum. */}
             <User className="h-5 w-5" style={getUserColorStyle(user.employee?.id ?? user.id, 0.25)} />
           </div>
+
+          <ThemeToggle />
 
           <button
             onClick={handleOpenGuide}

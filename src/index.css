@@ -1,6 +1,11 @@
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@500;600&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
+/* Enable the `dark:` variant based on a `.dark` class on <html>, toggled by
+   JS (see src/utils/theme.ts). Kept even though the theme below works mostly
+   through CSS variables, so any future targeted `dark:` utility still works. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* ==========================================================================
    STIJLGIDS - HET VERBAND TERNAT
 
@@ -107,6 +112,106 @@
   --radius-3xl: 30px;
 }
 
+/* ==========================================================================
+   DONKERE MODUS
+
+   Alle kleuren hierboven zijn CSS-variabelen (Tailwind v4 @theme), en elke
+   utility klasse (bg-slate-50, text-blue-700, ...) leest die variabele op
+   het moment van renderen. Door de variabelen hier opnieuw te definieren
+   onder een `.dark` klasse op <html>, herschildert de volledige app zich
+   automatisch - geen enkele component hoeft `dark:` klassen te krijgen.
+
+   De schaal wordt semantisch omgekeerd: 50/100 blijven "achtergrond", maar
+   worden nu de donkerste tinten; 800/900 blijven "tekst", maar worden nu de
+   lichtste tinten. Zo blijft bv. `bg-slate-50` overal de paginabodem en
+   `text-slate-900` overal de koptekst, in beide standen.
+   ========================================================================== */
+.dark {
+  color-scheme: dark;
+
+  /* --- Primair: logo-groen, opgelicht voor voldoende contrast op donker --- */
+  --color-blue-50: #14231A;
+  --color-blue-100: #1B2E22;
+  --color-blue-200: #24402C;
+  --color-blue-400: #5FA97E;
+  --color-blue-500: #66B384;
+  --color-blue-600: #55A374;
+  --color-blue-700: #86CE9F;
+  --color-blue-800: #A7DFB8;
+  --color-blue-900: #CBEFD6;
+
+  /* --- Neutraal: dezelfde warme schaal, omgekeerd qua helderheid --- */
+  --color-slate-50: #1A1B18;
+  --color-slate-100: #222319;
+  --color-slate-200: #35362F;
+  --color-slate-300: #45463D;
+  --color-slate-400: #8B8A80;
+  --color-slate-500: #A6A59A;
+  --color-slate-600: #C2C1B6;
+  --color-slate-700: #DAD9CD;
+  --color-slate-800: #EDEBE0;
+  --color-slate-900: #F7F5EC;
+
+  /* --- Succes (emerald) --- */
+  --color-emerald-50: #14231A;
+  --color-emerald-100: #1B2E22;
+  --color-emerald-200: #24402C;
+  --color-emerald-600: #5CAD79;
+  --color-emerald-700: #86CE9F;
+
+  /* --- Succes-alias (green) --- */
+  --color-green-50: #14231A;
+  --color-green-200: #24402C;
+  --color-green-500: #66B384;
+  --color-green-700: #86CE9F;
+  --color-green-800: #A7DFB8;
+
+  /* --- Waarschuwing (amber/koraal) --- */
+  --color-amber-50: #2A1810;
+  --color-amber-100: #331D14;
+  --color-amber-200: #47281B;
+  --color-amber-400: #F0987B;
+  --color-amber-500: #F2A488;
+  --color-amber-600: #F4B096;
+  --color-amber-700: #F7C3AC;
+  --color-amber-800: #FAD6C4;
+  --color-amber-900: #FDE9DE;
+
+  /* --- Fout (rose/red) --- */
+  --color-rose-50: #2A1810;
+  --color-rose-100: #331D14;
+  --color-rose-200: #47281B;
+  --color-rose-500: #F2A488;
+  --color-rose-600: #F4B096;
+  --color-rose-700: #F7C3AC;
+
+  --color-red-50: #2A1810;
+  --color-red-100: #331D14;
+  --color-red-200: #47281B;
+  --color-red-400: #F0987B;
+  --color-red-500: #F2A488;
+  --color-red-600: #F4B096;
+  --color-red-700: #F7C3AC;
+  --color-red-800: #FAD6C4;
+  --color-red-900: #FDE9DE;
+
+  /* --- Secundair accent (purple/sage) --- */
+  --color-purple-50: #16211A;
+  --color-purple-100: #1E2B22;
+  --color-purple-500: #8FBB9B;
+  --color-purple-600: #9BC7A6;
+  --color-purple-700: #B6D8BF;
+}
+
+/* `bg-white` / `bg-black` zijn Tailwind's eigen kleuren (niet hierboven
+   geherdefinieerd) en worden overal gebruikt als "kaart"-achtergrond
+   (headers, sidebar, panelen, inputs). Enkel de volledig dekkende variant
+   hoeft aangepast: transparante varianten zoals `bg-white/10` blijven
+   ongemoeid, die worden decoratief gebruikt bovenop gekleurde vlakken. */
+.dark .bg-white {
+  background-color: var(--color-slate-100);
+}
+
 /* Koppen volgen de stijlgids-typografie (Poppins, 500-600) zonder dat elke
    losse <h1>/<h2>/<h3> in de app een class hoeft te krijgen. */
 h1, h2, h3 {
@@ -117,11 +222,12 @@ h1, h2, h3 {
 
 body {
   font-family: var(--font-sans);
-  background-color: #FAF7F0;
-  color: #2E2E2A;
+  background-color: var(--color-slate-50);
+  color: var(--color-slate-900);
   -webkit-tap-highlight-color: transparent;
   /* Prevent scrolling rebound issues in Safari mobile */
   overscroll-behavior-y: contain;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 /* iOS Safe Areas support */
@@ -152,12 +258,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: var(--color-slate-300);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: var(--color-slate-400);
 }
 
 /* Print Mode Styles */

@@ -3,6 +3,12 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import './mobile.css';
+import {initTheme} from './utils/theme.ts';
+
+// Applies the persisted theme choice (or system preference) and keeps
+// listening for system changes. The inline script in index.html already
+// set the `.dark` class before this file loaded, to avoid a flash.
+initTheme();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
