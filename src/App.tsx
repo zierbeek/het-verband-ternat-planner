@@ -192,7 +192,10 @@ export default function App() {
           </div>
 
           <div className="h-9 w-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 border border-slate-200/50">
-            <User className="h-5 w-5" style={getUserColorStyle(user.id, 0.25)} />
+            {/* Gebruik het Employee-id (niet het User-id) voor de kleur, zodat
+                dit overal in de app dezelfde tint geeft als op het rooster,
+                het ruilbord, de verlofoverzichten en het beheercentrum. */}
+            <User className="h-5 w-5" style={getUserColorStyle(user.employee?.id ?? user.id, 0.25)} />
           </div>
 
           <button

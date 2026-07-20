@@ -1,8 +1,8 @@
 // Palet voor medewerker-identificatie op het rooster: elke persoon krijgt een
-// consistente kleur op basis van hun ID. Afgestemd op de stijlgids van Het
-// Verband Ternat (warme, gedempte tinten rond het logo-groen/koraal/sage in
-// plaats van felle, generieke webkleuren), terwijl de tinten onderling nog
-// voldoende verschillen om personen op het rooster te kunnen onderscheiden.
+// consistente kleur op basis van hun Employee-id. Afgestemd op de stijlgids
+// van Het Verband Ternat (warme, gedempte tinten rond het logo-groen/koraal/
+// sage in plaats van felle, generieke webkleuren), terwijl de tinten onderling
+// nog voldoende verschillen om personen op het rooster te kunnen onderscheiden.
 const USER_COLOR_PALETTE = [
   "#4F8963", // logo-groen
   "#C85F44", // koraal donker
@@ -37,13 +37,27 @@ const stringHash = (value: string) => {
   return Math.abs(hash);
 };
 
-export const getUserColor = (userId?: string | null) => {
-  if (!userId) return USER_COLOR_PALETTE[0];
-  return USER_COLOR_PALETTE[stringHash(userId) % USER_COLOR_PALETTE.length];
+/**
+ * Geeft de vaste kleur van een medewerker terug, gebaseerd op een hash van
+ * het meegegeven id.
+ *
+ * BELANGRIJK — geef hier altijd het `Employee.id` door, nooit het `User.id`.
+ * Dit zijn in het datamodel twee losstaande UUID's voor dezelfde persoon
+ * (een `User`-account heeft een gekoppeld maar apart `Employee`-record). Omdat
+ * de kleur op basis van de string-waarde van het id wordt berekend, geeft een
+ * verkeerd id-type een andere (inconsistente) kleur voor dezelfde persoon,
+ * ook al is het conceptueel "dezelfde" gebruiker. Elke plek in de app die een
+ * medewerkerkleur toont, moet dus `employee.id` gebruiken — bijvoorbeeld via
+ * `user.employee.id` wanneer je uitgaat van het ingelogde account.
+ */
+export const getUserColor = (employeeId?: string | null) => {
+  if (!employeeId) return USER_COLOR_PALETTE[0];
+  return USER_COLOR_PALETTE[stringHash(employeeId) % USER_COLOR_PALETTE.length];
 };
 
-export const getUserColorStyle = (userId?: string | null, alpha = 0.14) => {
-  const color = getUserColor(userId);
+/** Zie de waarschuwing bij `getUserColor`: geef hier altijd `employee.id` door. */
+export const getUserColorStyle = (employeeId?: string | null, alpha = 0.14) => {
+  const color = getUserColor(employeeId);
   const { r, g, b } = hexToRgb(color);
 
   return {
