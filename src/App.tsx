@@ -22,6 +22,7 @@ import AvailabilitySettings from "./components/AvailabilitySettings.tsx";
 import FirstTimeGuide from "./components/FirstTimeGuide.tsx";
 import PasswordChangeModal from "./components/PasswordChangeModal.tsx";
 import ThemeToggle from "./components/ThemeToggle.tsx";
+import FeedbackWidget from "./components/FeedbackWidget.tsx";
 import { getUserColorStyle } from "./utils/userColor.ts";
 
 export default function App() {
@@ -364,6 +365,14 @@ export default function App() {
           onComplete={handleCompleteGuide}
         />
       )}
+
+      {/* Floating feedback button - lets any user report a bug or suggest a
+          feature for the page they are currently on. Emailed straight to
+          the maintainer via /api/feedback. */}
+      <FeedbackWidget
+        token={token}
+        currentPage={menuItems.find((item) => item.id === activeTab)?.label || activeTab}
+      />
 
     </div>
   );
