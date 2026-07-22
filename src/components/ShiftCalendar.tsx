@@ -20,7 +20,7 @@ import {
   CalendarClock,
 } from "lucide-react";
 import { Shift, Employee, ShiftPreset, ShiftTemplate, Availability } from "../types.js";
-import { getUserColorStyle } from "../utils/userColor.ts";
+import { getUserColorStyle, getDisplayColor, getPresetTintStyle } from "../utils/userColor.ts";
 import { toDateStr } from "../utils/date.ts";
 
 interface ShiftCalendarProps {
@@ -72,6 +72,22 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
   const [viewType, setViewType] = useState<"month" | "week" | "day">("week");
   const [selectedEmployeeFilter, setSelectedEmployeeFilter] = useState<string>("all");
   const [isPrintMode, setIsPrintMode] = useState(false);
+
+  // Preset/shift colours are freely picked by the admin and stored as-is, so
+  // they need to be adjusted at render time for dark mode (see
+  // getDisplayColor/getPresetTintStyle in utils/userColor.ts). The theme is
+  // toggled by src/utils/theme.ts, which just flips a `.dark` class on
+  // <html> - watch that attribute directly instead of duplicating its
+  // system-preference/localStorage logic here.
+  const [isDarkMode, setIsDarkMode] = useState(
+    () => typeof document !== "undefined" && document.documentElement.classList.contains("dark")
+  );
+  useEffect(() => {
+    const root = document.documentElement;
+    const observer = new MutationObserver(() => setIsDarkMode(root.classList.contains("dark")));
+    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
 
   // Modals state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -875,9 +891,39 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
   const weekDates = getWeekDates(currentDate);
   const monthDates = getMonthDates(currentDate);
 
+  // Determines a shift's canonical position within its preset-defined column:
+  // an exact match on the assigned employee (shift.assignments[0].employeeId
+  // === preset.defaultEmployeeId) is tried first, since that's what tells two
+  // same-time-of-day presets apart (e.g. two "Voormiddag" presets, one for
+  // Filip and one for Laurens); falling back to matching the shift name
+  // against the preset label covers presets without a default employee.
+  // Shifts that match no preset sort after all matched ones.
+  const getPresetSortIndex = (shift: Shift) => {
+    const employeeId = shift.assignments?.[0]?.employeeId;
+    if (employeeId) {
+      const byEmployee = sortedPresets.findIndex((p) => p.defaultEmployeeId === employeeId);
+      if (byEmployee !== -1) return byEmployee;
+    }
+    const byName = sortedPresets.findIndex((p) => p.label === shift.name);
+    if (byName !== -1) return byName;
+    return Number.MAX_SAFE_INTEGER;
+  };
+
+  // Keeps shifts within the same day part (or day cell) in a stable order tied
+  // to the preset that "owns" that spot, rather than however the API happened
+  // to return them - so e.g. Filip's morning shift always lands in the same
+  // visual slot as Laurens's, day after day. Ties (including unmatched shifts)
+  // keep their original relative order via the idx tiebreaker.
+  const sortShiftsByPresetOrder = (shiftList: Shift[]) => {
+    return shiftList
+      .map((shift, idx) => ({ shift, idx, sortIdx: getPresetSortIndex(shift) }))
+      .sort((a, b) => (a.sortIdx !== b.sortIdx ? a.sortIdx - b.sortIdx : a.idx - b.idx))
+      .map((entry) => entry.shift);
+  };
+
   const getShiftsForDate = (date: Date) => {
     const dateStr = toDateStr(date);
-    return shifts.filter((s) => s.date === dateStr);
+    return sortShiftsByPresetOrder(shifts.filter((s) => s.date === dateStr));
   };
 
   const getShiftsForDateAndSlot = (date: Date, slot: PlannerSlot) => {
@@ -1274,7 +1320,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                                 openShiftEditor(shift);
                               }
                             }}
-                            style={{ backgroundColor: shift.color + "22", borderLeftColor: shift.color }}
+                            style={getPresetTintStyle(shift.color, isDarkMode)}
                             className={`px-1.5 py-0.5 border-l-2 rounded-r text-[10px] font-semibold text-slate-800 cursor-pointer hover:opacity-85 transition truncate shift-badge ${
                               isBulkMode && selectedShiftIds.includes(shift.id) ? "ring-2 ring-blue-400" : ""
                             } ${isPrintMode ? "whitespace-normal truncate-none" : ""}`}
@@ -1393,12 +1439,19 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                     const afternoonShifts = getShiftsForDateAndSlot(date, "afternoon");
                     const dayKey = toDateStr(date);
                     return (
-                      <div key={idx} className="p-2 bg-white space-y-2 flex flex-col">
+                      <div key={idx} className="p-2 bg-white space-y-3 flex flex-col">
                         {[
                           { key: "morning" as const, label: "Voormiddag", shifts: morningShifts },
                           { key: "afternoon" as const, label: "Namiddag", shifts: afternoonShifts },
                         ].map((slot) => {
                           const slotKey = `${dayKey}-${slot.key}`;
+                          const isDropTarget = draggedSlot === slotKey;
+                          // A thicker top accent in the slot's own preset colour
+                          // (plus the colour-coded label pill below) makes the
+                          // Voormiddag/Namiddag blocks distinguishable at a
+                          // glance, on top of the space-y-3 gap between them -
+                          // rather than relying only on the small text label.
+                          const slotColor = getDisplayColor(slotPresets[slot.key].color, isDarkMode);
 
                           return (
                             <div
@@ -1411,14 +1464,21 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                                 if (draggedSlot === slotKey) setDraggedSlot(null);
                               }}
                               onDrop={(event) => handlePlannerDrop(event, date, slot.key)}
+                              style={isDropTarget ? undefined : { borderTopColor: slotColor, borderTopWidth: "3px" }}
                               className={`rounded-xl border p-2 min-h-[130px] flex flex-col gap-2 transition ${
-                                draggedSlot === slotKey
+                                isDropTarget
                                   ? "border-blue-400 bg-blue-50/60"
                                   : "border-slate-200 bg-slate-50/40"
                               }`}
                             >
                               <div className="flex items-center justify-between gap-2">
-                                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">{slot.label}</span>
+                                <span
+                                  className="inline-flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full"
+                                  style={{ backgroundColor: `${slotColor}1f`, color: slotColor }}
+                                >
+                                  <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: slotColor }} />
+                                  {slot.label}
+                                </span>
                                 {user.role === "ADMINISTRATOR" && <span className="text-[9px] text-slate-400">Drop hier</span>}
                               </div>
 
@@ -1441,7 +1501,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                                           openShiftEditor(shift);
                                         }
                                       }}
-                                      style={{ borderLeftColor: shift.color }}
+                                      style={{ borderLeftColor: getDisplayColor(shift.color, isDarkMode) }}
                                       className={`p-2 border-l-4 rounded-r-xl bg-white hover:bg-slate-50 border transition cursor-pointer flex flex-col gap-1 shadow-2xs ${
                                         isBulkMode && selectedShiftIds.includes(shift.id)
                                           ? "border-blue-400 ring-2 ring-blue-400 bg-blue-50/60"
@@ -1532,6 +1592,8 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                   const config = slotPresets[slot];
                   const slotKey = `${toDateStr(currentDate)}-${slot}`;
                   const slotShifts = getShiftsForDateAndSlot(currentDate, slot);
+                  const isDropTarget = draggedSlot === slotKey;
+                  const slotColor = getDisplayColor(config.color, isDarkMode);
 
                   return (
                     <div
@@ -1544,8 +1606,9 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                         if (draggedSlot === slotKey) setDraggedSlot(null);
                       }}
                       onDrop={(event) => handlePlannerDrop(event, currentDate, slot)}
+                      style={isDropTarget ? undefined : { borderTopColor: slotColor, borderTopWidth: "3px" }}
                       className={`rounded-2xl border p-4 transition ${
-                        draggedSlot === slotKey ? "border-blue-400 bg-blue-50/60" : "border-slate-200 bg-slate-50/50"
+                        isDropTarget ? "border-blue-400 bg-blue-50/60" : "border-slate-200 bg-slate-50/50"
                       }`}
                     >
                       <div className="flex items-center justify-between gap-2 mb-3">
@@ -1553,7 +1616,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                           <h4 className="text-sm font-bold text-slate-900">{config.label}</h4>
                           <p className="text-[11px] text-slate-500">Sleep een shift of template hier</p>
                         </div>
-                        <span className="h-3 w-3 rounded-full" style={{ backgroundColor: config.color }} />
+                        <span className="h-3 w-3 rounded-full" style={{ backgroundColor: slotColor }} />
                       </div>
 
                       <div className="space-y-2 min-h-[110px]">
@@ -1571,7 +1634,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                               onClick={() => {
                                 openShiftEditor(shift);
                               }}
-                              style={{ borderLeftColor: shift.color }}
+                              style={{ borderLeftColor: getDisplayColor(shift.color, isDarkMode) }}
                               className="p-2.5 sm:p-3 border-l-4 rounded-r-xl bg-white border border-slate-200 shadow-2xs cursor-pointer"
                             >
                               <div className="font-bold text-slate-800 text-xs sm:text-sm truncate">{shift.name}</div>
@@ -1604,7 +1667,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                         openShiftEditor(shift);
                       }
                     }}
-                    style={{ borderLeftColor: shift.color }}
+                    style={{ borderLeftColor: getDisplayColor(shift.color, isDarkMode) }}
                     className={`p-5 border-l-4 rounded-r-2xl bg-slate-50/50 hover:bg-slate-50 transition border flex justify-between items-center cursor-pointer shadow-2xs ${
                       isBulkMode && selectedShiftIds.includes(shift.id) ? "border-blue-400 ring-2 ring-blue-400" : "border-slate-200"
                     }`}
