@@ -212,6 +212,37 @@
   background-color: var(--color-slate-100);
 }
 
+/* Form fields (e.g. the "Presets Beheren" panel, and every other modal that
+   follows the same `border border-slate-300` pattern without an explicit
+   `bg-*` class) were left to the browser's native `color-scheme: dark`
+   rendering for their background. That isn't reliable across browsers/
+   elements: the surrounding text and label colors flip to the light "dark
+   mode" palette while the input itself can stay rendered with a light
+   background, or vice versa, producing hard-to-read (near white-on-white or
+   dark-on-dark) fields. Giving inputs/selects/textareas an explicit
+   background and text color here fixes that everywhere at once, without
+   having to touch every individual modal in the app. `type="color"` and
+   `type="checkbox"`/`type="radio"` are excluded since their native swatch/
+   tick rendering already works fine and shouldn't get a text-colored box
+   around it. */
+.dark input:not([type="color"]):not([type="checkbox"]):not([type="radio"]),
+.dark select,
+.dark textarea {
+  background-color: var(--color-slate-100);
+  color: var(--color-slate-900);
+  border-color: var(--color-slate-300);
+}
+
+.dark input:not([type="color"]):not([type="checkbox"]):not([type="radio"])::placeholder,
+.dark textarea::placeholder {
+  color: var(--color-slate-400);
+}
+
+.dark select option {
+  background-color: var(--color-slate-100);
+  color: var(--color-slate-900);
+}
+
 /* Koppen volgen de stijlgids-typografie (Poppins, 500-600) zonder dat elke
    losse <h1>/<h2>/<h3> in de app een class hoeft te krijgen. */
 h1, h2, h3 {

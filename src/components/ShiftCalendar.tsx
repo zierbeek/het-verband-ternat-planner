@@ -160,6 +160,8 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
   const [draggedItem, setDraggedItem] = useState<PlannerDragItem | null>(null);
   const [draggedSlot, setDraggedSlot] = useState<string | null>(null);
   const [editEmployeeId, setEditEmployeeId] = useState<string>("");
+  const [editNotes, setEditNotes] = useState<string>("");
+  const [isSavingNotes, setIsSavingNotes] = useState(false);
 
   const showFeedback = (text: string, type: "success" | "error" = "success") => {
     setFeedbackMessage({ text, type });
@@ -311,6 +313,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
   const openShiftEditor = (shift: Shift) => {
     setSelectedShift(shift);
     setEditEmployeeId(shift.assignments?.[0]?.employeeId || "");
+    setEditNotes(shift.notes || "");
     setIsEditModalOpen(true);
   };
 
@@ -326,17 +329,27 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
     setIsBulkActionOpen(false);
   };
 
-  const handleBulkSubmit = async () => {
+  // NOTE: `action` is passed in explicitly rather than read from the
+  // `bulkAction` state. Callers used to do `setBulkAction("delete")`
+  // immediately followed by `handleBulkSubmit()` - but React state updates
+  // are asynchronous, so the function body was still reading the *previous*
+  // value of `bulkAction` (whatever action, if any, was last opened via
+  // "Medewerker toewijzen" / "Data verschuiven", or the initial "assign"
+  // default if neither had been opened yet this session). That meant
+  // clicking "Ja, verwijderen" could silently run a bulk-assign (unassigning
+  // everyone) instead of a bulk-delete. Passing the intended action as a
+  // parameter removes the race entirely.
+  const handleBulkSubmit = async (action: "assign" | "shift-dates" | "delete" = bulkAction) => {
     if (selectedShiftIds.length === 0) return;
     setIsBulkSubmitting(true);
     try {
       let url = "";
       let body: any = { shiftIds: selectedShiftIds };
 
-      if (bulkAction === "assign") {
+      if (action === "assign") {
         url = "/api/shifts/bulk-assign";
         body.employeeId = bulkAssignEmployeeId || null;
-      } else if (bulkAction === "shift-dates") {
+      } else if (action === "shift-dates") {
         url = "/api/shifts/bulk-shift-dates";
         body.dayOffset = Number(bulkDayOffset);
       } else {
@@ -356,9 +369,9 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
         const data = await res.json();
         const conflictNote = data.skippedConflicts ? ` (${data.skippedConflicts} overgeslagen door dubbele boeking)` : "";
         showFeedback(
-          bulkAction === "assign"
+          action === "assign"
             ? `${data.count} shift(en) bijgewerkt${conflictNote}!`
-            : bulkAction === "shift-dates"
+            : action === "shift-dates"
             ? `${data.count} shift(en) verplaatst${conflictNote}!`
             : `${data.count} shift(en) verwijderd!`
         );
@@ -706,6 +719,40 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
     } catch (e) {
       console.error(e);
       showFeedback("Fout bij het verbinden met de server", "error");
+    }
+  };
+
+  // Saves just the note on a single shift, independent from bulk actions and
+  // from the employee-assignment save above - so an admin can jot down a
+  // remark ("neemt vroeger op", "graag stil parkeren", ...) without touching
+  // who's assigned to the shift.
+  const handleSaveNotes = async () => {
+    if (!selectedShift) return;
+    setIsSavingNotes(true);
+    try {
+      const res = await fetch(`/api/shifts/${selectedShift.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ notes: editNotes }),
+      });
+
+      if (res.ok) {
+        const updated = await res.json();
+        setSelectedShift(updated);
+        showFeedback("Notitie opgeslagen!");
+        fetchShifts();
+      } else {
+        const err = await res.json();
+        showFeedback(err.error || "Fout bij het opslaan van de notitie", "error");
+      }
+    } catch (e) {
+      console.error(e);
+      showFeedback("Fout bij het verbinden met de server", "error");
+    } finally {
+      setIsSavingNotes(false);
     }
   };
 
@@ -1802,6 +1849,25 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                 </button>
               </div>
 
+              <div className="p-2.5 sm:p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                <label className="block text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-500">Notitie</label>
+                <textarea
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  rows={3}
+                  placeholder="Bijv. bijzonderheden over deze dienst..."
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg sm:rounded-xl bg-white text-sm text-slate-900 resize-none"
+                />
+                <button
+                  type="button"
+                  disabled={isSavingNotes}
+                  onClick={handleSaveNotes}
+                  className="w-full py-2 bg-slate-700 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg sm:rounded-xl font-bold text-xs sm:text-sm transition cursor-pointer"
+                >
+                  {isSavingNotes ? "Bezig..." : "Notitie opslaan"}
+                </button>
+              </div>
+
               {!isDeleteConfirmOpen ? (
                 <button
                   type="button"
@@ -2074,7 +2140,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
               <button
                 type="button"
                 disabled={isBulkSubmitting || (bulkAction === "shift-dates" && !bulkDayOffset)}
-                onClick={handleBulkSubmit}
+                onClick={() => handleBulkSubmit(bulkAction)}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg sm:rounded-xl font-semibold text-white transition shadow-xs cursor-pointer"
               >
                 {isBulkSubmitting ? "Bezig..." : "Toepassen"}
@@ -2106,7 +2172,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
                 disabled={isBulkSubmitting}
                 onClick={() => {
                   setBulkAction("delete");
-                  handleBulkSubmit();
+                  handleBulkSubmit("delete");
                 }}
                 className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg sm:rounded-xl font-semibold text-white transition shadow-xs cursor-pointer"
               >
