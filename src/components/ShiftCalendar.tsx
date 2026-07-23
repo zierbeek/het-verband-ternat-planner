@@ -1382,7 +1382,7 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
         {viewType === "week" && (
           <div>
             {user.role === "ADMINISTRATOR" && !isPrintMode && (
-              <div className="p-4 bg-slate-900 text-white border-b border-slate-800">
+              <div className="hidden sm:block p-4 bg-slate-900 text-white border-b border-slate-800">
                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2.5 sm:p-3">
                   <div>
                     <h3 className="text-sm font-bold tracking-tight">Snelle planning</h3>
@@ -1418,7 +1418,37 @@ export default function ShiftCalendar({ user, token }: ShiftCalendarProps) {
               </div>
             )}
 
-            <div className="overflow-x-auto overflow-y-auto touch-pan-x max-h-[calc(100vh-280px)] sm:max-h-[calc(100vh-240px)] md:max-h-[calc(100vh-200px)]">
+            {/* Compact mobile-only stand-in for the drag-and-drop "Snelle
+                planning" panel above: dragging presets isn't a usable touch
+                gesture, and the full panel ate a large amount of vertical
+                space on small screens. On mobile we just point people at the
+                "Presets beheren" modal instead, which still works via tap. */}
+            {user.role === "ADMINISTRATOR" && !isPrintMode && (
+              <div className="sm:hidden flex items-center justify-between gap-2 px-3 py-2 bg-slate-900 text-white border-b border-slate-800">
+                <p className="text-[11px] text-slate-300 leading-snug">
+                  Tik op een dienst om te bewerken. Slepen is enkel beschikbaar op desktop.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setIsPresetsModalOpen(true)}
+                  className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-dashed border-white/20 active:bg-white/10 text-[11px] font-bold text-slate-200"
+                >
+                  <Settings className="h-3 w-3" /> Presets
+                </button>
+              </div>
+            )}
+
+            {/* Small-screen hint that the week grid scrolls horizontally -
+                the grid below keeps every day at a readable minimum width
+                instead of squeezing 7 columns into the viewport, so this
+                affordance replaces "columns quietly cut off at the edge". */}
+            <div className="sm:hidden flex items-center justify-center gap-1.5 py-1 text-[11px] text-slate-400 bg-slate-50 border-b border-slate-200">
+              <ChevronLeft className="h-3 w-3" />
+              Veeg opzij voor meer dagen
+              <ChevronRight className="h-3 w-3" />
+            </div>
+
+            <div className="overflow-x-auto overflow-y-auto touch-pan-x week-grid-scroll max-h-[calc(100vh-280px)] sm:max-h-[calc(100vh-240px)] md:max-h-[calc(100vh-200px)]">
               <div className="min-w-[980px] lg:min-w-0">
                 <div className="grid grid-cols-7 bg-slate-50/70 border-b border-slate-200 py-3.5 text-center sticky top-0 z-10">
                   {weekDates.map((date, idx) => (

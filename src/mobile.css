@@ -103,6 +103,30 @@
     border-radius: 9999px;
   }
 
+  /* The week-view calendar grid is the widest horizontally-scrollable area
+     in the app (7 day columns). Give it a visibly persistent scrollbar
+     rather than the thin/transparent one used for generic .overflow-x-auto
+     areas, so it's obvious on first glance that more days are off-screen
+     to the side instead of the view just looking cut off. */
+  .week-grid-scroll {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(100, 116, 139, 0.55) rgba(100, 116, 139, 0.08);
+  }
+
+  .week-grid-scroll::-webkit-scrollbar {
+    height: 8px;
+  }
+
+  .week-grid-scroll::-webkit-scrollbar-track {
+    background: rgba(100, 116, 139, 0.08);
+  }
+
+  .week-grid-scroll::-webkit-scrollbar-thumb {
+    background-color: rgba(100, 116, 139, 0.55);
+    border-radius: 9999px;
+  }
+
   /* Safe area insets for notched devices */
   .safe-area-inset-top {
     padding-top: env(safe-area-inset-top);
